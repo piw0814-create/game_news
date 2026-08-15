@@ -39,7 +39,7 @@ spring:
         - id: news-service
           uri: lb://news-service
           predicates:
-            - Path=/api/courses/**
+            - Path=/api/courses/**,/api/games/**,/api/news/**,/api/topics/**
 
         # 현재 Enrollment API -> Interest Service
         - id: interest-service

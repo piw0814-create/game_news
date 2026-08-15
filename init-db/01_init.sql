@@ -13,6 +13,51 @@ CREATE TABLE IF NOT EXISTS users (
     PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+-- 게임 뉴스 서비스의 게임 기준 정보
+CREATE TABLE IF NOT EXISTS games (
+    id          BIGINT          NOT NULL AUTO_INCREMENT,
+    name        VARCHAR(255)    NOT NULL UNIQUE,
+    publisher   VARCHAR(255),
+    genre       VARCHAR(100),
+    platform    VARCHAR(255),
+    image_url   VARCHAR(1000),
+    created_at  DATETIME(6)     NOT NULL,
+    updated_at  DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 외부에서 수집한 원본 게임 뉴스 기사
+CREATE TABLE IF NOT EXISTS news_articles (
+    id               BIGINT          NOT NULL AUTO_INCREMENT,
+    title            VARCHAR(500)    NOT NULL,
+    url              VARCHAR(768)    NOT NULL UNIQUE,
+    source_name      VARCHAR(255)    NOT NULL,
+    source_type      VARCHAR(20)     NOT NULL COMMENT 'OFFICIAL | MEDIA | COMMUNITY',
+    published_at     DATETIME(6),
+    collected_at     DATETIME(6)     NOT NULL,
+    content          LONGTEXT,
+    category         VARCHAR(30)     COMMENT 'RELEASE | UPDATE | INDUSTRY | ESPORTS | EVENT | CONTROVERSY | OTHER',
+    analysis_status  VARCHAR(20)     NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | PROCESSING | COMPLETED | FAILED',
+    created_at       DATETIME(6)     NOT NULL,
+    updated_at       DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 기사와 게임의 N:M 관계 (한 기사에서 여러 게임을 다룰 수 있음)
+CREATE TABLE IF NOT EXISTS article_games (
+    id                BIGINT          NOT NULL AUTO_INCREMENT,
+    article_id        BIGINT          NOT NULL,
+    game_id           BIGINT          NOT NULL,
+    is_primary        BOOLEAN         NOT NULL DEFAULT FALSE,
+    confidence_score  DECIMAL(5,4),
+    created_at        DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_article_game (article_id, game_id),
+    FOREIGN KEY (article_id) REFERENCES news_articles(id),
+    FOREIGN KEY (game_id) REFERENCES games(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
 -- 강사가 강의 개설 (instructor_id → users.id)
 CREATE TABLE IF NOT EXISTS courses (
     id               BIGINT          NOT NULL AUTO_INCREMENT,
