@@ -185,6 +185,8 @@ services:
       - SPRING_PROFILES_ACTIVE=docker
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
       - NEWS_SERVICE_URL=http://news-service:8082
+      - COLLECTOR_STARTUP_CATCHUP_ENABLED=true
+      - COLLECTOR_STARTUP_CATCHUP_LIMIT=50
     depends_on:
       eureka-server:
         condition: service_healthy

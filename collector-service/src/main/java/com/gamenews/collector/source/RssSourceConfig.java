@@ -15,6 +15,7 @@ import java.util.Map;
 public class RssSourceConfig {
 
     private Schedule schedule = new Schedule();
+    private StartupCatchup startupCatchup = new StartupCatchup();
     private Map<String, Source> sources = new LinkedHashMap<>();
 
     public Source getRequiredSource(String sourceKey) {
@@ -31,6 +32,13 @@ public class RssSourceConfig {
         private boolean enabled = true;
         private long initialDelay = 10_000L;
         private long fixedDelay = 600_000L;
+    }
+
+    @Getter
+    @Setter
+    public static class StartupCatchup {
+        private boolean enabled = true;
+        private int limit = 50;
     }
 
     @Getter

@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -20,13 +21,14 @@ import java.util.Map;
 public class CollectorService {
 
     private static final int MAX_MANUAL_LIMIT = 20;
+    private static final int MAX_SCHEDULED_LIMIT = 100;
 
     private final GenericRssClient genericRssClient;
     private final RssSourceConfig sourceConfig;
     private final NewsServiceClient newsServiceClient;
 
     public CollectorDto.CollectionResult collect(String sourceKey, int limit) {
-        validateLimit(limit);
+        validateManualLimit(limit);
 
         String normalizedKey = normalizeSourceKey(sourceKey);
         RssSourceConfig.Source source = sourceConfig.getRequiredSource(normalizedKey);
@@ -36,7 +38,7 @@ public class CollectorService {
     }
 
     public List<CollectorDto.CollectionResult> collectAll(int limit) {
-        validateLimit(limit);
+        validateManualLimit(limit);
 
         List<CollectorDto.CollectionResult> results = new ArrayList<>();
         for (Map.Entry<String, RssSourceConfig.Source> entry : sourceConfig.getSources().entrySet()) {
@@ -57,10 +59,55 @@ public class CollectorService {
         return results;
     }
 
+    public CollectorDto.CollectionResult collectStartupCatchup(String sourceKey, int limit) {
+        validateScheduledLimit(limit);
+
+        String normalizedKey = normalizeSourceKey(sourceKey);
+        RssSourceConfig.Source source = sourceConfig.getRequiredSource(normalizedKey);
+        LocalDateTime baseline = newsServiceClient.getLatestPublishedAt(source.getName());
+
+        if (baseline == null) {
+            int initialLimit = source.getLimit();
+            log.info(
+                    "[Collector] startup catch-up 기준선 없음 - source={}, 일반 limit={}로 초기 수집",
+                    source.getName(),
+                    initialLimit
+            );
+            List<RssArticle> initialArticles = genericRssClient.fetchLatest(source, initialLimit);
+            return collect(source, initialArticles);
+        }
+
+        List<RssArticle> fetchedArticles = genericRssClient.fetchLatest(source, limit);
+        List<RssArticle> catchupCandidates = fetchedArticles.stream()
+                .filter(article -> article.getPublishedAt() != null)
+                .filter(article -> !article.getPublishedAt().isBefore(baseline))
+                .toList();
+
+        log.info(
+                "[Collector] startup catch-up 기준선 적용 - source={}, baseline={}, rssFetched={}, candidates={}",
+                source.getName(),
+                baseline,
+                fetchedArticles.size(),
+                catchupCandidates.size()
+        );
+
+        return collect(source, catchupCandidates);
+    }
+
     public CollectorDto.CollectionResult collectScheduled(String sourceKey) {
         String normalizedKey = normalizeSourceKey(sourceKey);
         RssSourceConfig.Source source = sourceConfig.getRequiredSource(normalizedKey);
-        return collect(normalizedKey, source.getLimit());
+        return collectScheduled(normalizedKey, source.getLimit());
+    }
+
+    public CollectorDto.CollectionResult collectScheduled(String sourceKey, int limit) {
+        validateScheduledLimit(limit);
+
+        String normalizedKey = normalizeSourceKey(sourceKey);
+        RssSourceConfig.Source source = sourceConfig.getRequiredSource(normalizedKey);
+        List<RssArticle> articles = genericRssClient.fetchLatest(source, limit);
+
+        return collect(source, articles);
     }
 
     private CollectorDto.CollectionResult collect(
@@ -114,9 +161,16 @@ public class CollectorService {
         return sourceKey.trim().toLowerCase(Locale.ROOT);
     }
 
-    private void validateLimit(int limit) {
+    private void validateManualLimit(int limit) {
         if (limit < 1 || limit > MAX_MANUAL_LIMIT) {
             throw new IllegalArgumentException("limit은 1 이상 " + MAX_MANUAL_LIMIT + " 이하여야 합니다");
+        }
+    }
+
+    private void validateScheduledLimit(int limit) {
+        if (limit < 1 || limit > MAX_SCHEDULED_LIMIT) {
+            throw new IllegalArgumentException(
+                    "자동 수집 limit은 1 이상 " + MAX_SCHEDULED_LIMIT + " 이하여야 합니다");
         }
     }
 

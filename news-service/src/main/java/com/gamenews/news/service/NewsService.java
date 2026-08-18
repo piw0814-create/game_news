@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -63,6 +64,18 @@ public class NewsService {
 
     public NewsArticleDto.NewsArticleResponse getNews(Long id) {
         return NewsArticleDto.NewsArticleResponse.from(findNewsById(id));
+    }
+
+    public OffsetDateTime getLatestPublishedAtBySource(String sourceName) {
+        if (sourceName == null || sourceName.isBlank()) {
+            throw new IllegalArgumentException("출처 이름이 비어 있습니다");
+        }
+
+        String normalizedSourceName = sourceName.trim();
+        return newsArticleRepository
+                .findTopBySourceNameAndPublishedAtIsNotNullOrderByPublishedAtDescIdDesc(normalizedSourceName)
+                .map(article -> article.getPublishedAt().atOffset(ZoneOffset.UTC))
+                .orElse(null);
     }
 
     public List<NewsArticleDto.NewsArticleResponse> getRecoveryCandidates(

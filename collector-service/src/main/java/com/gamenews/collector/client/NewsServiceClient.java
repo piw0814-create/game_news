@@ -3,10 +3,15 @@ package com.gamenews.collector.client;
 import com.gamenews.collector.dto.CollectorDto;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 @Component
 @RequiredArgsConstructor
@@ -18,6 +23,31 @@ public class NewsServiceClient {
 
     @Value("${collector.news-service.base-url}")
     private String newsServiceBaseUrl;
+
+    public LocalDateTime getLatestPublishedAt(String sourceName) {
+        CollectorDto.ApiResponse<String> response = webClientBuilder.build()
+                .get()
+                .uri(
+                        newsServiceBaseUrl
+                                + "/api/internal/news/latest-published-at?sourceName={sourceName}",
+                        sourceName)
+                .retrieve()
+                .bodyToMono(new ParameterizedTypeReference<CollectorDto.ApiResponse<String>>() {})
+                .block();
+
+        if (response == null || !response.isSuccess()) {
+            throw new IllegalStateException("News Service 최신 기사 시각 조회 결과가 비어 있습니다");
+        }
+
+        String latestPublishedAt = response.getData();
+        if (latestPublishedAt == null || latestPublishedAt.isBlank()) {
+            return null;
+        }
+
+        return OffsetDateTime.parse(latestPublishedAt)
+                .withOffsetSameInstant(ZoneOffset.UTC)
+                .toLocalDateTime();
+    }
 
     public SaveStatus createNews(CollectorDto.NewsCreateRequest request) {
         SaveStatus result = webClientBuilder.build()

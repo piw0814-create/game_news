@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @RestController
@@ -18,6 +19,13 @@ import java.util.List;
 public class NewsInternalController {
 
     private final NewsService newsService;
+
+    @GetMapping("/latest-published-at")
+    public ResponseEntity<ApiResponse<OffsetDateTime>> getLatestPublishedAt(
+            @RequestParam String sourceName) {
+        return ResponseEntity.ok(ApiResponse.success(
+                newsService.getLatestPublishedAtBySource(sourceName)));
+    }
 
     @GetMapping("/recovery-candidates")
     public ResponseEntity<ApiResponse<List<NewsArticleDto.NewsArticleResponse>>> getRecoveryCandidates(

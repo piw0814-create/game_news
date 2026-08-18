@@ -9,12 +9,16 @@ import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Optional;
 
 public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> {
 
     boolean existsByUrl(String url);
 
     List<NewsArticle> findAllByOrderByCreatedAtDesc();
+
+    Optional<NewsArticle> findTopBySourceNameAndPublishedAtIsNotNullOrderByPublishedAtDescIdDesc(
+            String sourceName);
 
     @Query("""
             SELECT article
