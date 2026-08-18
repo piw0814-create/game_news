@@ -42,19 +42,50 @@
             />
           </label>
 
-          <label class="sort-box">
-            <span class="sort-caption">정렬</span>
-            <select v-model="sortType" aria-label="뉴스 정렬">
-              <option value="latest">최신순</option>
-              <option value="importance">중요도순</option>
-              <option
-                value="personalized"
-                :disabled="!interestStore.hasInterests"
-              >
-                관심순
-              </option>
-            </select>
-          </label>
+          <details ref="filterMenu" class="filter-menu">
+            <summary class="filter-trigger" aria-label="기간 및 정렬 설정">
+              <span class="filter-caption">필터</span>
+              <span>{{ periodLabel }}</span>
+              <span class="filter-divider">·</span>
+              <span>{{ sortLabel }}</span>
+              <svg viewBox="0 0 20 20" aria-hidden="true">
+                <path d="m6 8 4 4 4-4" />
+              </svg>
+            </summary>
+
+            <div class="filter-popover">
+              <div class="filter-group">
+                <strong>기간</strong>
+                <button
+                  v-for="period in periods"
+                  :key="period.value"
+                  type="button"
+                  class="filter-option"
+                  :class="{ active: periodType === period.value }"
+                  @click="selectPeriod(period.value)"
+                >
+                  <span>{{ period.label }}</span>
+                  <span v-if="periodType === period.value" class="check-mark">✓</span>
+                </button>
+              </div>
+
+              <div class="filter-group sort-group">
+                <strong>정렬</strong>
+                <button
+                  v-for="sort in sortOptions"
+                  :key="sort.value"
+                  type="button"
+                  class="filter-option"
+                  :class="{ active: sortType === sort.value }"
+                  :disabled="sort.value === 'personalized' && !interestStore.hasInterests"
+                  @click="selectSort(sort.value)"
+                >
+                  <span>{{ sort.label }}</span>
+                  <span v-if="sortType === sort.value" class="check-mark">✓</span>
+                </button>
+              </div>
+            </div>
+          </details>
         </div>
       </section>
 
@@ -146,7 +177,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import AppHeader from "@/components/AppHeader.vue";
 import TopicCard from "@/components/TopicCard.vue";
 import { useTopicStore } from "@/store/topic.js";
@@ -166,12 +197,30 @@ const categories = [
   { label: "기타", value: "OTHER" },
 ];
 
+const periods = [
+  { label: "전체", value: "ALL", milliseconds: null },
+  { label: "최근 4시간", value: "4H", milliseconds: 4 * 60 * 60 * 1000 },
+  { label: "최근 24시간", value: "24H", milliseconds: 24 * 60 * 60 * 1000 },
+  { label: "최근 7일", value: "7D", milliseconds: 7 * 24 * 60 * 60 * 1000 },
+  { label: "최근 1개월", value: "30D", milliseconds: 30 * 24 * 60 * 60 * 1000 },
+];
+
+const sortOptions = [
+  { label: "최신순", value: "latest" },
+  { label: "중요도순", value: "importance" },
+  { label: "관심순", value: "personalized" },
+];
+
 const PAGE_SIZE = 20;
 
 const searchKeyword = ref("");
 const selectedCategory = ref("ALL");
+const periodType = ref("ALL");
 const sortType = ref("latest");
 const visibleCount = ref(PAGE_SIZE);
+const filterMenu = ref(null);
+const currentTime = ref(Date.now());
+let clockTimer = null;
 
 function topicTime(topic) {
   const value = topic.lastUpdatedAt || topic.firstSeenAt || topic.createdAt;
@@ -192,12 +241,25 @@ function isTodayTopic(topic) {
   const topicDate = new Date(value);
   if (Number.isNaN(topicDate.getTime())) return false;
 
-  const today = new Date();
+  const today = new Date(currentTime.value);
   return (
     topicDate.getFullYear() === today.getFullYear() &&
     topicDate.getMonth() === today.getMonth() &&
     topicDate.getDate() === today.getDate()
   );
+}
+
+function matchesPeriod(topic) {
+  const selectedPeriod = periods.find(
+    (period) => period.value === periodType.value,
+  );
+
+  if (!selectedPeriod?.milliseconds) return true;
+
+  const time = topicTime(topic);
+  if (!time) return false;
+
+  return time >= currentTime.value - selectedPeriod.milliseconds;
 }
 
 function compareImportance(a, b) {
@@ -236,7 +298,7 @@ const filteredTopics = computed(() => {
     const categoryMatches =
       selectedCategory.value === "ALL" ||
       topic.category === selectedCategory.value;
-    if (!categoryMatches) return false;
+    if (!categoryMatches || !matchesPeriod(topic)) return false;
 
     if (!keyword) return true;
 
@@ -288,11 +350,26 @@ const nextLoadCount = computed(() =>
   Math.min(PAGE_SIZE, otherTopics.value.length - visibleCount.value),
 );
 
+const periodLabel = computed(
+  () => periods.find((period) => period.value === periodType.value)?.label || "전체",
+);
+
 const sortLabel = computed(() => {
   if (sortType.value === "importance") return "중요도순";
   if (sortType.value === "personalized") return "관심순";
   return "최신순";
 });
+
+function selectPeriod(value) {
+  periodType.value = value;
+  filterMenu.value?.removeAttribute("open");
+}
+
+function selectSort(value) {
+  if (value === "personalized" && !interestStore.hasInterests) return;
+  sortType.value = value;
+  filterMenu.value?.removeAttribute("open");
+}
 
 function loadMoreTopics() {
   visibleCount.value += PAGE_SIZE;
@@ -305,10 +382,11 @@ function resetVisibleTopics() {
 function resetFilters() {
   searchKeyword.value = "";
   selectedCategory.value = "ALL";
+  periodType.value = "ALL";
 }
 
 watch(
-  [searchKeyword, selectedCategory, sortType],
+  [searchKeyword, selectedCategory, periodType, sortType],
   resetVisibleTopics,
 );
 
@@ -323,6 +401,13 @@ watch(
 
 onMounted(() => {
   Promise.all([topicStore.fetchTopics(), interestStore.loadGameIds()]);
+  clockTimer = window.setInterval(() => {
+    currentTime.value = Date.now();
+  }, 60 * 1000);
+});
+
+onBeforeUnmount(() => {
+  if (clockTimer) window.clearInterval(clockTimer);
 });
 </script>
 
@@ -461,30 +546,122 @@ onMounted(() => {
   color: #a0a5ad;
 }
 
-.sort-box {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.filter-menu {
+  position: relative;
   flex: 0 0 auto;
 }
 
-.sort-caption {
+.filter-menu summary {
+  list-style: none;
+}
+
+.filter-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.filter-trigger {
+  display: flex;
+  align-items: center;
+  min-width: 172px;
+  padding: 8px 5px 8px 8px;
+  border-bottom: 1px solid #cfd3d8;
+  color: #41464e;
+  font-size: 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.filter-caption {
+  margin-right: 9px;
   color: #979ca4;
   font-size: 11px;
 }
 
-.sort-box select {
-  min-width: 90px;
-  padding: 7px 25px 7px 8px;
+.filter-divider {
+  margin: 0 5px;
+  color: #b0b5bc;
+}
+
+.filter-trigger svg {
+  width: 16px;
+  height: 16px;
+  margin-left: auto;
+  fill: none;
+  stroke: #616771;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.6;
+  transition: transform 0.15s ease;
+}
+
+.filter-menu[open] .filter-trigger svg {
+  transform: rotate(180deg);
+}
+
+.filter-popover {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 7px);
+  right: 0;
+  width: 196px;
+  padding: 7px;
+  border: 1px solid #dfe2e6;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 8px 24px rgb(20 24 32 / 10%);
+}
+
+.filter-group strong {
+  display: block;
+  padding: 5px 8px 6px;
+  color: #636a74;
+  font-size: 11px;
+}
+
+.filter-group.sort-group {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid #e5e7ea;
+}
+
+.filter-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px;
   border: 0;
-  border-bottom: 1px solid #cfd3d8;
-  border-radius: 0;
-  outline: 0;
-  background-color: #fff;
-  color: #41464e;
+  border-radius: 3px;
+  background: transparent;
+  color: #444a53;
   font: inherit;
   font-size: 12px;
+  text-align: left;
   cursor: pointer;
+}
+
+.filter-option:hover {
+  background: #f6f7f9;
+}
+
+.filter-option.active {
+  background: #f3f2ff;
+  color: #4e55d9;
+}
+
+.filter-option:disabled {
+  color: #b4b8bf;
+  cursor: not-allowed;
+}
+
+.filter-option:disabled:hover {
+  background: transparent;
+}
+
+.check-mark {
+  color: #5860ff;
+  font-size: 14px;
+  line-height: 1;
 }
 
 .feed-section + .feed-section {
@@ -683,8 +860,12 @@ onMounted(() => {
     max-width: none;
   }
 
-  .sort-box {
-    justify-content: flex-end;
+  .filter-menu {
+    align-self: flex-end;
+  }
+
+  .filter-trigger {
+    min-width: 190px;
   }
 }
 </style>
