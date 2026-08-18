@@ -17,7 +17,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -87,7 +86,7 @@ public class TopicIntegrationService {
                 .build());
 
         syncArticleGamesToTopic(topic, article.getId());
-        topic.touch(LocalDateTime.now(ZoneOffset.UTC));
+        updateLastUpdatedAt(topic, article);
 
         return TopicIntegrationDto.IntegrateResponse.builder()
                 .topicId(topic.getId())
@@ -105,10 +104,7 @@ public class TopicIntegrationService {
             title = article.getTitle();
         }
 
-        LocalDateTime firstSeenAt = article.getPublishedAt() != null
-                ? article.getPublishedAt()
-                : article.getCollectedAt();
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime firstSeenAt = getArticleReferenceTime(article);
 
         Topic topic = Topic.builder()
                 .title(title)
@@ -117,7 +113,7 @@ public class TopicIntegrationService {
                 .category(request.getCategory())
                 .importanceScore(null)
                 .firstSeenAt(firstSeenAt)
-                .lastUpdatedAt(now)
+                .lastUpdatedAt(firstSeenAt)
                 .build();
 
         return topicRepository.save(topic);
@@ -140,6 +136,21 @@ public class TopicIntegrationService {
                     .relevanceScore(articleGame.getConfidenceScore())
                     .build());
         }
+    }
+
+    private void updateLastUpdatedAt(Topic topic, NewsArticle article) {
+        LocalDateTime articleReferenceTime = getArticleReferenceTime(article);
+        LocalDateTime currentLastUpdatedAt = topic.getLastUpdatedAt();
+
+        if (currentLastUpdatedAt == null || articleReferenceTime.isAfter(currentLastUpdatedAt)) {
+            topic.touch(articleReferenceTime);
+        }
+    }
+
+    private LocalDateTime getArticleReferenceTime(NewsArticle article) {
+        return article.getPublishedAt() != null
+                ? article.getPublishedAt()
+                : article.getCollectedAt();
     }
 
     private NewsArticle findArticleById(Long articleId) {

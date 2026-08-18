@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @Service
@@ -38,6 +39,8 @@ public class TopicArticleService {
                 .article(article)
                 .build();
 
+        updateLastUpdatedAt(topic, article);
+
         return TopicArticleDto.TopicArticleResponse.from(topicArticleRepository.save(topicArticle));
     }
 
@@ -47,6 +50,17 @@ public class TopicArticleService {
         return topicArticleRepository.findAllByTopic_IdOrderByCreatedAtAsc(topicId).stream()
                 .map(TopicArticleDto.TopicArticleResponse::from)
                 .toList();
+    }
+
+    private void updateLastUpdatedAt(Topic topic, NewsArticle article) {
+        LocalDateTime articleReferenceTime = article.getPublishedAt() != null
+                ? article.getPublishedAt()
+                : article.getCollectedAt();
+        LocalDateTime currentLastUpdatedAt = topic.getLastUpdatedAt();
+
+        if (currentLastUpdatedAt == null || articleReferenceTime.isAfter(currentLastUpdatedAt)) {
+            topic.touch(articleReferenceTime);
+        }
     }
 
     private Topic findTopicById(Long topicId) {

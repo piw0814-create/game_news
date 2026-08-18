@@ -31,6 +31,9 @@ public class TopicService {
     @Transactional
     public TopicDto.TopicResponse createTopic(TopicDto.CreateRequest request) {
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime firstSeenAt = request.getFirstSeenAt() != null
+                ? request.getFirstSeenAt()
+                : now;
 
         Topic topic = Topic.builder()
                 .title(request.getTitle().trim())
@@ -38,8 +41,8 @@ public class TopicService {
                 .whyImportant(trimToNull(request.getWhyImportant()))
                 .category(request.getCategory())
                 .importanceScore(request.getImportanceScore())
-                .firstSeenAt(request.getFirstSeenAt() != null ? request.getFirstSeenAt() : now)
-                .lastUpdatedAt(now)
+                .firstSeenAt(firstSeenAt)
+                .lastUpdatedAt(firstSeenAt)
                 .build();
 
         Topic saved = topicRepository.save(topic);
