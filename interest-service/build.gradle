@@ -4,7 +4,7 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
-group = 'com.lecture'
+group = 'com.gamenews'
 version = '0.0.1-SNAPSHOT'
 
 java {
@@ -39,9 +39,6 @@ dependencies {
     // WebClient (서비스 간 동기 통신)
     implementation 'org.springframework.boot:spring-boot-starter-webflux'
 
-    // Kafka (비동기 이벤트)
-    implementation 'org.springframework.kafka:spring-kafka'
-
     // Validation
     implementation 'org.springframework.boot:spring-boot-starter-validation'
 
@@ -54,7 +51,6 @@ dependencies {
 
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.kafka:spring-kafka-test'
     testImplementation 'org.springframework.security:spring-security-test'
 }
 

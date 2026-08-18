@@ -1,13 +1,12 @@
--- 온라인 강의 플랫폼 초기 DDL
+-- 게임 뉴스 AI 인텔리전스 피드 초기 DDL
 -- Spring JPA ddl-auto: update 로도 생성되지만
--- 명시적 DDL로 테이블 선후 관계를 문서화
+-- 명시적 DDL로 핵심 테이블과 관계를 문서화한다.
 
 CREATE TABLE IF NOT EXISTS users (
     id          BIGINT          NOT NULL AUTO_INCREMENT,
     email       VARCHAR(255)    NOT NULL UNIQUE,
     password    VARCHAR(255)    NOT NULL,
     name        VARCHAR(100)    NOT NULL,
-    role        VARCHAR(20)     NOT NULL COMMENT 'STUDENT | INSTRUCTOR',
     created_at  DATETIME(6),
     updated_at  DATETIME(6),
     PRIMARY KEY (id)
@@ -43,7 +42,22 @@ CREATE TABLE IF NOT EXISTS news_articles (
     PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 기사와 게임의 N:M 관계 (한 기사에서 여러 게임을 다룰 수 있음)
+-- 여러 기사가 가리키는 하나의 실제 사건
+CREATE TABLE IF NOT EXISTS topics (
+    id                BIGINT          NOT NULL AUTO_INCREMENT,
+    title             VARCHAR(500)    NOT NULL,
+    summary           LONGTEXT,
+    why_important     LONGTEXT,
+    category          VARCHAR(30)     COMMENT 'RELEASE | UPDATE | INDUSTRY | ESPORTS | EVENT | CONTROVERSY | OTHER',
+    importance_score  INT,
+    first_seen_at     DATETIME(6)     NOT NULL,
+    last_updated_at   DATETIME(6)     NOT NULL,
+    created_at        DATETIME(6)     NOT NULL,
+    updated_at        DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 기사와 게임의 N:M 관계
 CREATE TABLE IF NOT EXISTS article_games (
     id                BIGINT          NOT NULL AUTO_INCREMENT,
     article_id        BIGINT          NOT NULL,
@@ -57,48 +71,38 @@ CREATE TABLE IF NOT EXISTS article_games (
     FOREIGN KEY (game_id) REFERENCES games(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
-
--- 강사가 강의 개설 (instructor_id → users.id)
-CREATE TABLE IF NOT EXISTS courses (
-    id               BIGINT          NOT NULL AUTO_INCREMENT,
-    title            VARCHAR(255)    NOT NULL,
-    description      TEXT,
-    category         VARCHAR(50)     NOT NULL COMMENT 'BACKEND|FRONTEND|DEVOPS|DATA_SCIENCE|MOBILE|SECURITY|DATABASE|OTHER',
-    price            DECIMAL(10,2)   NOT NULL,
-    instructor_id    BIGINT          NOT NULL,
-    enrollment_count INT             NOT NULL DEFAULT 0,
-    status           VARCHAR(20)     NOT NULL DEFAULT 'ACTIVE' COMMENT 'ACTIVE | INACTIVE',
-    created_at       DATETIME(6),
-    updated_at       DATETIME(6),
+-- Topic과 기사의 N:M 관계
+CREATE TABLE IF NOT EXISTS topic_articles (
+    id          BIGINT      NOT NULL AUTO_INCREMENT,
+    topic_id    BIGINT      NOT NULL,
+    article_id  BIGINT      NOT NULL,
+    created_at  DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
-    FOREIGN KEY (instructor_id) REFERENCES users(id)
+    UNIQUE KEY uq_topic_article (topic_id, article_id),
+    FOREIGN KEY (topic_id) REFERENCES topics(id),
+    FOREIGN KEY (article_id) REFERENCES news_articles(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 수강생이 수강 신청 (user_id → users.id, course_id → courses.id)
-CREATE TABLE IF NOT EXISTS enrollments (
+-- Topic과 게임의 N:M 관계
+CREATE TABLE IF NOT EXISTS topic_games (
+    id               BIGINT          NOT NULL AUTO_INCREMENT,
+    topic_id         BIGINT          NOT NULL,
+    game_id          BIGINT          NOT NULL,
+    is_primary       BOOLEAN         NOT NULL DEFAULT FALSE,
+    relevance_score  DECIMAL(5,4),
+    created_at       DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_topic_game (topic_id, game_id),
+    FOREIGN KEY (topic_id) REFERENCES topics(id),
+    FOREIGN KEY (game_id) REFERENCES games(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 사용자의 관심 게임 (MSA 경계를 넘는 ID이므로 users/games에 DB FK를 걸지 않음)
+CREATE TABLE IF NOT EXISTS user_games (
     id          BIGINT      NOT NULL AUTO_INCREMENT,
     user_id     BIGINT      NOT NULL,
-    course_id   BIGINT      NOT NULL,
-    status      VARCHAR(20) NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | ACTIVE | CANCELLED',
-    created_at  DATETIME(6),
-    updated_at  DATETIME(6),
+    game_id     BIGINT      NOT NULL,
+    created_at  DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_user_course (user_id, course_id),
-    FOREIGN KEY (user_id)   REFERENCES users(id),
-    FOREIGN KEY (course_id) REFERENCES courses(id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
-
--- 수강 확정 후 결제 (user_id → users.id, course_id → courses.id)
-CREATE TABLE IF NOT EXISTS payments (
-    id              BIGINT          NOT NULL AUTO_INCREMENT,
-    user_id         BIGINT          NOT NULL,
-    course_id       BIGINT          NOT NULL,
-    amount          DECIMAL(10,2)   NOT NULL,
-    status          VARCHAR(20)     NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | COMPLETED | FAILED | CANCELLED',
-    transaction_id  VARCHAR(255)    UNIQUE,
-    created_at      DATETIME(6),
-    updated_at      DATETIME(6),
-    PRIMARY KEY (id),
-    FOREIGN KEY (user_id)   REFERENCES users(id),
-    FOREIGN KEY (course_id) REFERENCES courses(id)
+    UNIQUE KEY uq_user_game (user_id, game_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

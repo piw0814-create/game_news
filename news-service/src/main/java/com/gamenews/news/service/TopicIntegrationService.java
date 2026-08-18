@@ -1,0 +1,162 @@
+package com.gamenews.news.service;
+
+import com.gamenews.news.dto.TopicIntegrationDto;
+import com.gamenews.news.entity.ArticleGame;
+import com.gamenews.news.entity.NewsArticle;
+import com.gamenews.news.entity.Topic;
+import com.gamenews.news.entity.TopicArticle;
+import com.gamenews.news.entity.TopicGame;
+import com.gamenews.news.repository.ArticleGameRepository;
+import com.gamenews.news.repository.NewsArticleRepository;
+import com.gamenews.news.repository.TopicArticleRepository;
+import com.gamenews.news.repository.TopicGameRepository;
+import com.gamenews.news.repository.TopicRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class TopicIntegrationService {
+
+    private final TopicRepository topicRepository;
+    private final TopicArticleRepository topicArticleRepository;
+    private final TopicGameRepository topicGameRepository;
+    private final NewsArticleRepository newsArticleRepository;
+    private final ArticleGameRepository articleGameRepository;
+
+    public List<TopicIntegrationDto.CandidateResponse> getCandidates(
+            TopicIntegrationDto.CandidateRequest request) {
+        NewsArticle article = findArticleById(request.getArticleId());
+        List<ArticleGame> articleGames = articleGameRepository
+                .findAllByArticle_IdOrderByPrimaryDescCreatedAtAsc(article.getId());
+
+        if (articleGames.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> gameIds = articleGames.stream()
+                .map(articleGame -> articleGame.getGame().getId())
+                .distinct()
+                .toList();
+
+        LocalDateTime referenceTime = article.getPublishedAt() != null
+                ? article.getPublishedAt()
+                : article.getCollectedAt();
+        LocalDateTime cutoff = referenceTime.minusHours(request.getWindowHours());
+
+        return topicRepository
+                .findCandidatesByGameIdsAndUpdatedAfter(
+                        gameIds,
+                        cutoff,
+                        PageRequest.of(0, request.getLimit()))
+                .stream()
+                .map(TopicIntegrationDto.CandidateResponse::from)
+                .toList();
+    }
+
+    @Transactional
+    public TopicIntegrationDto.IntegrateResponse integrate(
+            TopicIntegrationDto.IntegrateRequest request) {
+        NewsArticle article = findArticleById(request.getArticleId());
+
+        Optional<TopicArticle> existingLink = topicArticleRepository
+                .findFirstByArticle_IdOrderByCreatedAtAsc(article.getId());
+        if (existingLink.isPresent()) {
+            return TopicIntegrationDto.IntegrateResponse.builder()
+                    .topicId(existingLink.get().getTopic().getId())
+                    .action(TopicIntegrationDto.IntegrationAction.ALREADY_LINKED)
+                    .build();
+        }
+
+        boolean createNew = request.getTargetTopicId() == null;
+        Topic topic = createNew
+                ? createTopicFromArticle(article, request)
+                : findTopicById(request.getTargetTopicId());
+
+        topicArticleRepository.save(TopicArticle.builder()
+                .topic(topic)
+                .article(article)
+                .build());
+
+        syncArticleGamesToTopic(topic, article.getId());
+        topic.touch(LocalDateTime.now(ZoneOffset.UTC));
+
+        return TopicIntegrationDto.IntegrateResponse.builder()
+                .topicId(topic.getId())
+                .action(createNew
+                        ? TopicIntegrationDto.IntegrationAction.CREATED_NEW
+                        : TopicIntegrationDto.IntegrationAction.LINKED_EXISTING)
+                .build();
+    }
+
+    private Topic createTopicFromArticle(
+            NewsArticle article,
+            TopicIntegrationDto.IntegrateRequest request) {
+        String title = trimToNull(request.getTitle());
+        if (title == null) {
+            title = article.getTitle();
+        }
+
+        LocalDateTime firstSeenAt = article.getPublishedAt() != null
+                ? article.getPublishedAt()
+                : article.getCollectedAt();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+
+        Topic topic = Topic.builder()
+                .title(title)
+                .summary(trimToNull(request.getSummary()))
+                .whyImportant(null)
+                .category(request.getCategory())
+                .importanceScore(null)
+                .firstSeenAt(firstSeenAt)
+                .lastUpdatedAt(now)
+                .build();
+
+        return topicRepository.save(topic);
+    }
+
+    private void syncArticleGamesToTopic(Topic topic, Long articleId) {
+        List<ArticleGame> articleGames = articleGameRepository
+                .findAllByArticle_IdOrderByPrimaryDescCreatedAtAsc(articleId);
+
+        for (ArticleGame articleGame : articleGames) {
+            Long gameId = articleGame.getGame().getId();
+            if (topicGameRepository.existsByTopic_IdAndGame_Id(topic.getId(), gameId)) {
+                continue;
+            }
+
+            topicGameRepository.save(TopicGame.builder()
+                    .topic(topic)
+                    .game(articleGame.getGame())
+                    .primary(articleGame.isPrimary())
+                    .relevanceScore(articleGame.getConfidenceScore())
+                    .build());
+        }
+    }
+
+    private NewsArticle findArticleById(Long articleId) {
+        return newsArticleRepository.findById(articleId)
+                .orElseThrow(() -> new IllegalArgumentException("기사를 찾을 수 없습니다: " + articleId));
+    }
+
+    private Topic findTopicById(Long topicId) {
+        return topicRepository.findById(topicId)
+                .orElseThrow(() -> new IllegalArgumentException("Topic을 찾을 수 없습니다: " + topicId));
+    }
+
+    private String trimToNull(String value) {
+        if (value == null) {
+            return null;
+        }
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+}

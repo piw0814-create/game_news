@@ -60,6 +60,14 @@ public class NewsArticle {
     @Column(columnDefinition = "LONGTEXT")
     private String content;
 
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
+    private String summary;
+
+    @Lob
+    @Column(columnDefinition = "LONGTEXT")
+    private String keywords;
+
     @Enumerated(EnumType.STRING)
     @Column(length = 30)
     private NewsCategory category;
@@ -75,4 +83,15 @@ public class NewsArticle {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public void updateAnalysisStatus(AnalysisStatus analysisStatus) {
+        this.analysisStatus = analysisStatus;
+    }
+
+    public void completeAnalysis(String summary, NewsCategory category, String keywords) {
+        this.summary = summary;
+        this.category = category;
+        this.keywords = keywords;
+        this.analysisStatus = AnalysisStatus.COMPLETED;
+    }
 }

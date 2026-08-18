@@ -1,13 +1,13 @@
 :root {
-  --color-primary: #185FA5;
-  --color-primary-dark: #0C447C;
-  --color-primary-light: #E6F1FB;
+  --color-primary: #2467a8;
+  --color-primary-dark: #184f83;
+  --color-primary-light: #edf4fb;
   --color-secondary: #378ADD;
-  --color-text-primary: #1a1a2e;
+  --color-text-primary: #1d2025;
   --color-text-secondary: #6b7280;
   --color-text-muted: #9ca3af;
   --color-bg-primary: #ffffff;
-  --color-bg-secondary: #f8fafc;
+  --color-bg-secondary: #ffffff;
   --color-bg-tertiary: #f1f5f9;
   --color-border: #e2e8f0;
   --color-border-hover: #cbd5e1;
@@ -23,7 +23,7 @@
   --shadow-sm: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
   --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 2px 6px rgba(0,0,0,0.04);
   --shadow-lg: 0 10px 32px rgba(0,0,0,0.10), 0 4px 12px rgba(0,0,0,0.06);
-  --font-sans: 'Plus Jakarta Sans', 'Noto Sans KR', sans-serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Pretendard', 'Noto Sans KR', 'Segoe UI', sans-serif;
   --transition: all 0.2s ease;
 }
 

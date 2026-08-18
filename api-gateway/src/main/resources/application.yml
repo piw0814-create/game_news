@@ -5,59 +5,57 @@ spring:
   application:
     name: api-gateway
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI:http://localhost:8080/oauth2/jwks}
-          issuer-uri: ${SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI:http://localhost:8080}
-
   cloud:
     gateway:
       discovery:
         locator:
-          enabled: true
-          lower-case-service-id: true
+          # 서비스 ID 기반 자동 라우팅을 막고 아래 명시 경로만 외부에 공개한다.
+          enabled: false
 
       routes:
-
-        # OAuth / Auth Server
-        - id: auth-server
-          uri: lb://auth-server
-          predicates:
-            - Path=/oauth2/**,/login,/login/**,/logout,/userinfo,/error,/default-ui.css,/favicon.ico,/.well-known/openid-configuration,/.well-known/oauth-authorization-server
-          filters:
-            - PreserveHostHeader
-
-        # User
-        - id: user-service
+        # 자체 인증 - 로그인/JWKS는 User Service가 제공한다.
+        - id: auth
           uri: lb://user-service
           predicates:
-            - Path=/api/users/**
+            - Path=/api/auth/login,/api/auth/jwks
 
-        # 현재 Course API -> News Service
-        - id: news-service
+        # User - 회원가입과 내 정보만 외부 공개
+        - id: user-register
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/register
+            - Method=POST
+
+        - id: user-me
+          uri: lb://user-service
+          predicates:
+            - Path=/api/users/me
+            - Method=GET
+
+        # Game - 사용자 조회 전용
+        - id: game-read
           uri: lb://news-service
           predicates:
-            - Path=/api/courses/**,/api/games/**,/api/news/**,/api/topics/**
+            - Path=/api/games,/api/games/**
+            - Method=GET
 
-        # 현재 Enrollment API -> Interest Service
+        # Topic - 사용자 조회 전용
+        - id: topic-read
+          uri: lb://news-service
+          predicates:
+            - Path=/api/topics,/api/topics/**
+            - Method=GET
+
+        # Interest - 로그인 사용자 관심 게임 관리
         - id: interest-service
           uri: lb://interest-service
           predicates:
-            - Path=/api/enrollments/**
+            - Path=/api/interests/**
 
-        # 현재 Payment API -> Collector Service
-        - id: collector-service
-          uri: lb://collector-service
-          predicates:
-            - Path=/api/payments/**
-
-        # 현재 Recommend API -> Insight Service
-        - id: insight-service
-          uri: lb://insight-service
-          predicates:
-            - Path=/api/recommend/**
+app:
+  jwt:
+    jwk-set-uri: ${GAME_NEWS_JWK_SET_URI:http://localhost:8081/api/auth/jwks}
+    issuer: ${GAME_NEWS_JWT_ISSUER:game-news}
 
 eureka:
   client:
@@ -81,4 +79,4 @@ springdoc:
 
 logging:
   level:
-    com.lecture.gateway.filter: DEBUG
+    com.gamenews.gateway.filter: DEBUG

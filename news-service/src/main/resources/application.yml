@@ -6,10 +6,9 @@ spring:
     name: news-service
 
   datasource:
-    url: jdbc:mariadb://lecturedb:3306/lecture_db 
-    # 컨테이너 이름 lecturedb 로 입력 (원래 IP를 입력하지만, 재부팅 시 변경될 수 있는 가능성 제거)
-    username: manager
-    password: SqlDba-1
+    url: ${SPRING_DATASOURCE_URL:jdbc:mariadb://localhost:3379/game_news_db}
+    username: ${SPRING_DATASOURCE_USERNAME:manager}
+    password: ${SPRING_DATASOURCE_PASSWORD:SqlDba-1}
     driver-class-name: org.mariadb.jdbc.Driver
 
   jpa:
@@ -21,12 +20,12 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MariaDBDialect
 
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: http://localhost:9000/oauth2/jwks
-          issuer-uri: http://localhost:9000
+
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
 eureka:
   client:
@@ -45,3 +44,9 @@ springdoc:
     path: /api-docs
   swagger-ui:
     path: /swagger-ui.html
+
+# Kafka Topic
+app:
+  kafka:
+    topics:
+      news-created: news.created

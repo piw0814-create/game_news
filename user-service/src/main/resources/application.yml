@@ -6,10 +6,9 @@ spring:
     name: user-service
 
   datasource:
-    url: jdbc:mariadb://lecturedb:3306/lecture_db 
-    # 컨테이너 이름 lecturedb 로 입력 (원래 IP를 입력하지만, 재부팅 시 변경될 수 있는 가능성 제거)
-    username: manager
-    password: SqlDba-1
+    url: ${SPRING_DATASOURCE_URL:jdbc:mariadb://localhost:3379/game_news_db}
+    username: ${SPRING_DATASOURCE_USERNAME:manager}
+    password: ${SPRING_DATASOURCE_PASSWORD:SqlDba-1}
     driver-class-name: org.mariadb.jdbc.Driver
 
   jpa:
@@ -21,13 +20,13 @@ spring:
         format_sql: true
         dialect: org.hibernate.dialect.MariaDBDialect
 
-  # Resource Server - Auth Server JWK로 토큰 검증
-  security:
-    oauth2:
-      resourceserver:
-        jwt:
-          jwk-set-uri: http://localhost:9000/oauth2/jwks
-          issuer-uri: http://localhost:9000
+app:
+  jwt:
+    private-key-base64: ${JWT_PRIVATE_KEY_BASE64}
+    public-key-base64: ${JWT_PUBLIC_KEY_BASE64}
+    key-id: ${JWT_KEY_ID:game-news-key-1}
+    issuer: ${JWT_ISSUER:game-news}
+    access-token-ttl-seconds: ${JWT_ACCESS_TOKEN_TTL_SECONDS:3600}
 
 eureka:
   client:
@@ -45,5 +44,5 @@ springdoc:
 logging:
   level:
     root: INFO
-    com.lecture.user: DEBUG
+    com.gamenews.user: DEBUG
     org.springframework.web: DEBUG

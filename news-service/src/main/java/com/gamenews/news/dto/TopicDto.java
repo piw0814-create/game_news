@@ -18,6 +18,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
 
 public class TopicDto {
@@ -56,10 +58,12 @@ public class TopicDto {
         private String whyImportant;
         private NewsCategory category;
         private Integer importanceScore;
-        private LocalDateTime firstSeenAt;
-        private LocalDateTime lastUpdatedAt;
-        private LocalDateTime createdAt;
-        private LocalDateTime updatedAt;
+        private List<Long> gameIds;
+        private Integer recencyBonus;
+        private OffsetDateTime firstSeenAt;
+        private OffsetDateTime lastUpdatedAt;
+        private OffsetDateTime createdAt;
+        private OffsetDateTime updatedAt;
 
         public static TopicResponse from(Topic topic) {
             return TopicResponse.builder()
@@ -69,10 +73,32 @@ public class TopicDto {
                     .whyImportant(topic.getWhyImportant())
                     .category(topic.getCategory())
                     .importanceScore(topic.getImportanceScore())
-                    .firstSeenAt(topic.getFirstSeenAt())
-                    .lastUpdatedAt(topic.getLastUpdatedAt())
-                    .createdAt(topic.getCreatedAt())
-                    .updatedAt(topic.getUpdatedAt())
+                    .gameIds(List.of())
+                    .recencyBonus(0)
+                    .firstSeenAt(toUtc(topic.getFirstSeenAt()))
+                    .lastUpdatedAt(toUtc(topic.getLastUpdatedAt()))
+                    .createdAt(toUtc(topic.getCreatedAt()))
+                    .updatedAt(toUtc(topic.getUpdatedAt()))
+                    .build();
+        }
+
+        public static TopicResponse from(
+                Topic topic,
+                List<Long> gameIds,
+                Integer recencyBonus) {
+            return TopicResponse.builder()
+                    .id(topic.getId())
+                    .title(topic.getTitle())
+                    .summary(topic.getSummary())
+                    .whyImportant(topic.getWhyImportant())
+                    .category(topic.getCategory())
+                    .importanceScore(topic.getImportanceScore())
+                    .gameIds(gameIds)
+                    .recencyBonus(recencyBonus)
+                    .firstSeenAt(toUtc(topic.getFirstSeenAt()))
+                    .lastUpdatedAt(toUtc(topic.getLastUpdatedAt()))
+                    .createdAt(toUtc(topic.getCreatedAt()))
+                    .updatedAt(toUtc(topic.getUpdatedAt()))
                     .build();
         }
     }
@@ -136,10 +162,10 @@ public class TopicDto {
         private Integer importanceScore;
         private List<GameSummary> games;
         private List<ArticleSummary> articles;
-        private LocalDateTime firstSeenAt;
-        private LocalDateTime lastUpdatedAt;
-        private LocalDateTime createdAt;
-        private LocalDateTime updatedAt;
+        private OffsetDateTime firstSeenAt;
+        private OffsetDateTime lastUpdatedAt;
+        private OffsetDateTime createdAt;
+        private OffsetDateTime updatedAt;
 
         public static TopicDetailResponse from(
                 Topic topic,
@@ -158,11 +184,16 @@ public class TopicDto {
                     .articles(topicArticles.stream()
                             .map(ArticleSummary::from)
                             .toList())
-                    .firstSeenAt(topic.getFirstSeenAt())
-                    .lastUpdatedAt(topic.getLastUpdatedAt())
-                    .createdAt(topic.getCreatedAt())
-                    .updatedAt(topic.getUpdatedAt())
+                    .firstSeenAt(toUtc(topic.getFirstSeenAt()))
+                    .lastUpdatedAt(toUtc(topic.getLastUpdatedAt()))
+                    .createdAt(toUtc(topic.getCreatedAt()))
+                    .updatedAt(toUtc(topic.getUpdatedAt()))
                     .build();
         }
     }
+
+    private static OffsetDateTime toUtc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
+    }
+
 }

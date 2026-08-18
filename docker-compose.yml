@@ -10,7 +10,7 @@ services:
     image: mariadb:11.2
     environment:
       MYSQL_ROOT_PASSWORD: SqlDba-1
-      MYSQL_DATABASE: lecture_db
+      MYSQL_DATABASE: game_news_db
       MYSQL_USER: manager
       MYSQL_PASSWORD: SqlDba-1
     ports:
@@ -25,7 +25,7 @@ services:
       retries: 5
       start_period: 30s
     networks:
-      - lecture-net
+      - game-news-net
 
   kafka:
     image: confluentinc/cp-kafka:7.7.0
@@ -60,7 +60,7 @@ services:
       retries: 5
       start_period: 60s
     networks:
-      - lecture-net
+      - game-news-net
 
   # Service Discovery
 
@@ -79,33 +79,7 @@ services:
       retries: 10
       start_period: 60s
     networks:
-      - lecture-net
-
-  # Auth Server
-
-  auth-server:
-    image: msa-lecture/auth-server:1.0
-    ports:
-      - "9000:9000"
-    environment:
-      - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/lecture_db
-      - SPRING_DATASOURCE_USERNAME=manager
-      - SPRING_DATASOURCE_PASSWORD=SqlDba-1
-      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
-    depends_on:
-      mariadb:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:9000/actuator/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 10
-      start_period: 120s
-    networks:
-      - lecture-net
+      - game-news-net
 
   # API Gateway
 
@@ -118,15 +92,15 @@ services:
     environment:
       - SPRING_PROFILES_ACTIVE=docker
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://localhost:8080
+      - GAME_NEWS_JWK_SET_URI=http://user-service:8081/api/auth/jwks
+      - GAME_NEWS_JWT_ISSUER=${JWT_ISSUER:-game-news}
     depends_on:
       eureka-server:
         condition: service_healthy
-      auth-server:
-        condition: service_healthy
+      user-service:
+        condition: service_started
     networks:
-      - lecture-net
+      - game-news-net
 
   # Microservices
 
@@ -135,130 +109,125 @@ services:
       context: ./user-service
       dockerfile: Dockerfile
     ports:
-      - "8081:8081"
+      - "127.0.0.1:8081:8081"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/lecture_db
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/game_news_db
       - SPRING_DATASOURCE_USERNAME=manager
       - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
+      - JWT_PRIVATE_KEY_BASE64=${JWT_PRIVATE_KEY_BASE64}
+      - JWT_PUBLIC_KEY_BASE64=${JWT_PUBLIC_KEY_BASE64}
+      - JWT_KEY_ID=${JWT_KEY_ID:-game-news-key-1}
+      - JWT_ISSUER=${JWT_ISSUER:-game-news}
+      - JWT_ACCESS_TOKEN_TTL_SECONDS=${JWT_ACCESS_TOKEN_TTL_SECONDS:-3600}
     depends_on:
       mariadb:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
-      auth-server:
-        condition: service_healthy
     networks:
-      - lecture-net
+      - game-news-net
 
   news-service:
     build:
       context: ./news-service
       dockerfile: Dockerfile
     ports:
-      - "8082:8082"
+      - "127.0.0.1:8082:8082"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/lecture_db
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/game_news_db
       - SPRING_DATASOURCE_USERNAME=manager
       - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
     depends_on:
       mariadb:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
-      auth-server:
+      kafka:
         condition: service_healthy
     networks:
-      - lecture-net
+      - game-news-net
 
   interest-service:
     build:
       context: ./interest-service
       dockerfile: Dockerfile
     ports:
-      - "8083:8083"
+      - "127.0.0.1:8083:8083"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/lecture_db
+      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/game_news_db
       - SPRING_DATASOURCE_USERNAME=manager
       - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - NEWS_SERVICE_URL=http://news-service:8082
     depends_on:
       mariadb:
         condition: service_healthy
       eureka-server:
         condition: service_healthy
-      auth-server:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      news-service:
+        condition: service_started
     networks:
-      - lecture-net
+      - game-news-net
 
   collector-service:
     build:
       context: ./collector-service
       dockerfile: Dockerfile
     ports:
-      - "8084:8084"
+      - "127.0.0.1:8084:8084"
     environment:
       - SPRING_PROFILES_ACTIVE=docker
-      - SPRING_DATASOURCE_URL=jdbc:mariadb://mariadb:3306/lecture_db
-      - SPRING_DATASOURCE_USERNAME=manager
-      - SPRING_DATASOURCE_PASSWORD=SqlDba-1
       - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-server:8761/eureka/
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_JWK_SET_URI=http://auth-server:9000/oauth2/jwks
-      - SPRING_SECURITY_OAUTH2_RESOURCESERVER_JWT_ISSUER_URI=http://auth-server:9000
-      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - NEWS_SERVICE_URL=http://news-service:8082
     depends_on:
-      mariadb:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
-      auth-server:
-        condition: service_healthy
-      kafka:
-        condition: service_healthy
+      news-service:
+        condition: service_started
     networks:
-      - lecture-net
+      - game-news-net
 
   insight-service:
     build:
       context: ./insight-service
       dockerfile: Dockerfile
     ports:
-      - "8085:8085"
+      - "127.0.0.1:8085:8085"
+    env_file:
+      - ./insight-service/.env
     environment:
       - EUREKA_SERVER_URL=http://eureka-server:8761/eureka
       - EUREKA_INSTANCE_HOST=insight-service
-      - JWT_ISSUER_URI=http://localhost:8080
-      - JWK_SET_URI=http://auth-server:9000/oauth2/jwks
-      - ENROLLMENT_SERVICE_URL=http://interest-service:8083
-      - COURSE_SERVICE_URL=http://news-service:8082
+      - JWT_ISSUER_URI=${JWT_ISSUER:-game-news}
+      - JWK_SET_URI=http://user-service:8081/api/auth/jwks
+      - NEWS_SERVICE_URL=http://news-service:8082
+      - NEWS_SERVICE_TIMEOUT_SECONDS=10
       - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_CONSUMER_GROUP_ID=insight-service
+      - KAFKA_TOPIC_NEWS_CREATED=news.created
+      - KAFKA_RETRY_DELAY_SECONDS=5
+      - OPENAI_TOPIC_MATCH_MAX_OUTPUT_TOKENS=500
+      - OPENAI_TOPIC_ANALYSIS_MAX_OUTPUT_TOKENS=900
+      - TOPIC_ANALYSIS_ARTICLE_LIMIT=10
+      - TOPIC_CANDIDATE_WINDOW_HOURS=48
+      - TOPIC_CANDIDATE_DB_LIMIT=10
+      - TOPIC_CANDIDATE_AI_LIMIT=3
+      - TOPIC_MATCH_CONFIDENCE_THRESHOLD=0.85
     depends_on:
       eureka-server:
         condition: service_healthy
-      auth-server:
-        condition: service_healthy
       kafka:
         condition: service_healthy
-      interest-service:
-        condition: service_started
       news-service:
         condition: service_started
     networks:
-      - lecture-net
+      - game-news-net
 
 # Volumes & Networks
 
@@ -267,5 +236,5 @@ volumes:
   kafka_data:
 
 networks:
-  lecture-net:
+  game-news-net:
     driver: bridge

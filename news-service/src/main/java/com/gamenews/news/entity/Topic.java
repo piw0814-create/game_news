@@ -66,4 +66,21 @@ public class Topic {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public void touch(LocalDateTime time) {
+        this.lastUpdatedAt = time;
+    }
+
+    public void updateAnalysis(
+            String title,
+            String summary,
+            NewsCategory category,
+            Integer importanceScore,
+            String whyImportant) {
+        this.title = title;
+        this.summary = summary;
+        this.category = category;
+        this.importanceScore = importanceScore;
+        this.whyImportant = whyImportant;
+    }
 }

@@ -4,8 +4,11 @@ import { useAuthStore } from '@/store/auth.js'
 const routes = [
   {
     path: '/',
-    name: 'Landing',
-    component: () => import('@/views/LandingView.vue')
+    name: 'Home',
+    redirect: () => {
+      const auth = useAuthStore()
+      return auth.isAuthenticated ? { name: 'Feed' } : { name: 'Login' }
+    }
   },
   {
     path: '/login',
@@ -14,32 +17,21 @@ const routes = [
     meta: { guestOnly: true }
   },
   {
-    path: '/callback',
-    name: 'Callback',
-    component: () => import('@/views/CallbackView.vue')
-  },
-  {
-    path: '/courses',
-    name: 'CourseList',
-    component: () => import('@/views/CourseListView.vue'),
+    path: '/feed',
+    name: 'Feed',
+    component: () => import('@/views/FeedView.vue'),
     meta: { requiresAuth: true }
   },
   {
-    path: '/courses/new',
-    name: 'CourseCreate',
-    component: () => import('@/views/CourseCreateView.vue'),
-    meta: { requiresAuth: true, instructorOnly: true }
-  },
-  {
-    path: '/courses/:id(\\d+)',
-    name: 'CourseDetail',
-    component: () => import('@/views/CourseDetailView.vue'),
+    path: '/topics/:id(\\d+)',
+    name: 'TopicDetail',
+    component: () => import('@/views/TopicDetailView.vue'),
     meta: { requiresAuth: true }
   },
   {
-    path: '/enrollments',
-    name: 'Enrollment',
-    component: () => import('@/views/EnrollmentView.vue'),
+    path: '/interests',
+    name: 'Interests',
+    component: () => import('@/views/InterestView.vue'),
     meta: { requiresAuth: true }
   },
   {
@@ -58,7 +50,6 @@ const router = createRouter({
   }
 })
 
-// 인증/권한 가드
 router.beforeEach((to) => {
   const auth = useAuthStore()
 
@@ -67,11 +58,7 @@ router.beforeEach((to) => {
   }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {
-    return { name: 'CourseList' }
-  }
-
-  if (to.meta.instructorOnly && auth.user?.role !== 'INSTRUCTOR') {
-    return { name: 'CourseList' }
+    return { name: 'Feed' }
   }
 })
 

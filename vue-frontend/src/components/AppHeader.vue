@@ -1,29 +1,23 @@
 <template>
   <header class="app-header">
     <div class="header-inner">
-      <!-- 로고 -->
-      <router-link to="/" class="logo">
-        <img src="@/assets/images/logo/main_logo.png" alt="LearnNexus" class="logo-img" />
-        <span class="logo-text">LearnNexus</span>
+      <router-link :to="auth.isAuthenticated ? '/feed' : '/login'" class="brand">
+        <span class="brand-mark">G</span>
+        <span class="brand-text">GAME INTELLIGENCE</span>
       </router-link>
 
-      <!-- 네비게이션 -->
-      <nav class="nav-links" v-if="auth.isAuthenticated">
-        <router-link to="/courses" class="nav-link" :class="{ active: $route.path.startsWith('/courses') }">강의</router-link>
-        <router-link to="/enrollments" class="nav-link" :class="{ active: $route.path === '/enrollments' }">내 학습</router-link>
+      <nav v-if="auth.isAuthenticated" class="nav-links">
+        <router-link to="/feed" class="nav-link" :class="{ active: isNewsRoute }">뉴스</router-link>
+        <router-link to="/interests" class="nav-link" :class="{ active: route.name === 'Interests' }">관심 게임</router-link>
       </nav>
 
-      <!-- 우측 액션 -->
       <div class="header-actions">
         <template v-if="auth.isAuthenticated">
-          <router-link to="/mypage" class="user-avatar" :title="auth.user?.name">
-            {{ auth.user?.name?.charAt(0) || '?' }}
-          </router-link>
-          <button class="btn btn-ghost btn-sm" @click="handleLogout">로그아웃</button>
+          <router-link to="/mypage" class="mypage-link">내 정보</router-link>
+          <button type="button" class="logout-button" @click="handleLogout">로그아웃</button>
         </template>
         <template v-else>
-          <router-link to="/login" class="btn btn-ghost btn-sm">로그인</router-link>
-          <router-link to="/login" class="btn btn-primary btn-sm">시작하기</router-link>
+          <router-link to="/login" class="login-link">로그인</router-link>
         </template>
       </div>
     </div>
@@ -31,15 +25,19 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth.js'
-import { useRouter } from 'vue-router'
 
 const auth = useAuthStore()
+const route = useRoute()
 const router = useRouter()
 
+const isNewsRoute = computed(() => route.name === 'Feed' || route.name === 'TopicDetail')
+
 function handleLogout() {
-  auth.logout()
-  router.push('/')
+  auth.logout(false)
+  router.push('/login')
 }
 </script>
 
@@ -48,81 +46,115 @@ function handleLogout() {
   position: sticky;
   top: 0;
   z-index: 100;
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--color-border);
+  background: rgba(255, 255, 255, 0.97);
+  border-bottom: 1px solid #eceef1;
 }
+
 .header-inner {
-  max-width: 1200px;
+  width: min(1120px, calc(100% - 48px));
+  height: 58px;
   margin: 0 auto;
-  padding: 0 24px;
-  height: 64px;
   display: flex;
   align-items: center;
-  gap: 32px;
 }
-.logo {
-  display: flex;
+
+.brand {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   flex-shrink: 0;
 }
-.logo-img {
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-  border-radius: 8px;
+
+.brand-mark {
+  width: 25px;
+  height: 25px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 3px;
+  background: #1d2025;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
 }
-.logo-text {
-  font-size: 17px;
-  font-weight: 700;
-  color: var(--color-text-primary);
-  letter-spacing: -0.3px;
+
+.brand-text {
+  color: #1b1e23;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.045em;
 }
+
 .nav-links {
   display: flex;
-  gap: 4px;
-  flex: 1;
+  align-items: stretch;
+  gap: 22px;
+  height: 100%;
+  margin-left: 40px;
 }
+
 .nav-link {
-  padding: 6px 14px;
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--color-text-secondary);
-  transition: var(--transition);
+  position: relative;
+  display: flex;
+  align-items: center;
+  padding: 0 3px;
+  color: #777e88;
+  font-size: 13px;
+  font-weight: 600;
 }
-.nav-link:hover,
+
 .nav-link.active {
-  color: var(--color-primary);
-  background: var(--color-primary-light);
+  color: #202329;
 }
+
+.nav-link.active::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  background: #202329;
+}
+
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   margin-left: auto;
 }
-.btn-sm {
-  padding: 7px 16px;
-  font-size: 13px;
-}
-.user-avatar {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: var(--color-primary-light);
-  color: var(--color-primary);
-  font-size: 13px;
+
+.logout-button,
+.login-link,
+.mypage-link {
+  background: none;
+  color: #6d747e;
+  font-size: 12px;
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: var(--transition);
 }
-.user-avatar:hover {
-  background: var(--color-primary);
-  color: #fff;
+
+.logout-button:hover,
+.login-link:hover,
+.mypage-link:hover {
+  color: #1f2329;
+}
+
+@media (max-width: 640px) {
+  .header-inner {
+    width: min(100% - 32px, 1120px);
+  }
+
+  .brand-text {
+    display: none;
+  }
+
+  .nav-links {
+    gap: 14px;
+    margin-left: 18px;
+  }
+
+  .mypage-link {
+    display: none;
+  }
 }
 </style>

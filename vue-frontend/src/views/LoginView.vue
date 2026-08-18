@@ -1,43 +1,58 @@
 <template>
   <div class="login-page">
     <div class="login-layout">
-      <!-- 좌측 브랜딩 -->
-      <div class="login-left">
+      <section class="login-left">
         <div class="brand">
-          <img src="@/assets/images/logo/main_logo.png" alt="LearnNexus" class="brand-logo" />
-          <span class="brand-name">LearnNexus</span>
+          <span class="brand-mark">G</span>
+          <span class="brand-name">GAME INTELLIGENCE</span>
         </div>
+
         <div class="brand-content">
-          <h2>다시 만나서<br>반갑습니다</h2>
-          <p>로그인하고 나만의 학습 여정을 이어가세요.</p>
+          <p class="eyebrow">GAME NEWS, GROUPED BY EVENT</p>
+          <h2>게임 뉴스를<br>기사보다 사건으로</h2>
+          <p>여러 출처의 기사를 하나의 Topic으로 묶고 핵심 내용과 중요도를 빠르게 확인합니다.</p>
+
           <ul class="feature-list">
-            <li v-for="f in features" :key="f">
-              <span class="dot"></span>{{ f }}
+            <li v-for="feature in features" :key="feature">
+              <span class="dot"></span>{{ feature }}
             </li>
           </ul>
         </div>
-      </div>
+      </section>
 
-      <!-- 우측 -->
-      <div class="login-right">
+      <section class="login-right">
         <div class="login-box fade-in-up">
-          <router-link to="/" class="back-link">← 홈으로</router-link>
-
-          <!-- 로그인 영역 -->
           <div v-if="!showRegister" class="section">
             <h3 class="section-title">로그인</h3>
-            <p class="section-desc">LearnNexus 계정으로 로그인합니다.</p>
-            <button class="btn btn-primary btn-full" @click="handleOAuth">로그인</button>
+            <p class="section-desc">계정에 로그인해 Topic Feed와 관심 게임을 확인합니다.</p>
+
+            <form class="form" @submit.prevent="handleLogin">
+              <div class="form-group">
+                <label class="form-label">이메일</label>
+                <input v-model="loginForm.email" type="email" class="form-input" placeholder="user@example.com" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label">비밀번호</label>
+                <input v-model="loginForm.password" type="password" class="form-input" placeholder="비밀번호" required />
+              </div>
+
+              <div v-if="error" class="error-msg">{{ error }}</div>
+
+              <button type="submit" class="btn btn-primary btn-full" :disabled="loading">
+                <span v-if="loading">로그인 중...</span>
+                <span v-else>로그인</span>
+              </button>
+            </form>
+
             <div class="switch-link">
               계정이 없으신가요?
-              <button class="text-btn" @click="showRegister = true">회원가입</button>
+              <button class="text-btn" @click="openRegister">회원가입</button>
             </div>
           </div>
 
-          <!-- 회원가입 영역 -->
           <div v-else class="section">
             <h3 class="section-title">회원가입</h3>
-            <form @submit.prevent="handleRegister" class="form">
+            <form class="form" @submit.prevent="handleRegister">
               <div class="form-group">
                 <label class="form-label">이름</label>
                 <input v-model="registerForm.name" type="text" class="form-input" placeholder="홍길동" required />
@@ -50,37 +65,34 @@
                 <label class="form-label">비밀번호</label>
                 <input v-model="registerForm.password" type="password" class="form-input" placeholder="8자 이상" required />
               </div>
-              <div class="form-group">
-                <label class="form-label">역할</label>
-                <select v-model="registerForm.role" class="form-input">
-                  <option value="STUDENT">학생</option>
-                  <option value="INSTRUCTOR">강사</option>
-                </select>
-              </div>
+
               <div v-if="error" class="error-msg">{{ error }}</div>
               <div v-if="success" class="success-msg">{{ success }}</div>
+
               <button type="submit" class="btn btn-primary btn-full" :disabled="loading">
                 <span v-if="loading">가입 중...</span>
                 <span v-else>회원가입</span>
               </button>
             </form>
+
             <div class="switch-link">
               이미 계정이 있으신가요?
-              <button class="text-btn" @click="showRegister = false">로그인</button>
+              <button class="text-btn" @click="openLogin">로그인</button>
             </div>
           </div>
-
         </div>
-      </div>
+      </section>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth.js'
 import { authApi } from '@/api/auth.js'
 
+const router = useRouter()
 const auth = useAuthStore()
 
 const showRegister = ref(false)
@@ -88,26 +100,58 @@ const loading = ref(false)
 const error = ref('')
 const success = ref('')
 
-const registerForm = ref({ name: '', email: '', password: '', role: 'STUDENT' })
+const createLoginForm = () => ({ email: '', password: '' })
+const createRegisterForm = () => ({ name: '', email: '', password: '' })
+const loginForm = ref(createLoginForm())
+const registerForm = ref(createRegisterForm())
 
-const features = ['수강 중인 강의 이어보기', '맞춤 강의 추천', '수료증 관리']
+const features = ['동일 사건 Topic 통합', 'AI 요약과 중요도', '관심 게임 기반 Feed']
 
-function handleOAuth() {
-  auth.redirectToLogin()
+function clearMessages() {
+  error.value = ''
+  success.value = ''
+}
+
+function openRegister() {
+  clearMessages()
+  showRegister.value = true
+}
+
+function openLogin() {
+  clearMessages()
+  showRegister.value = false
+}
+
+async function handleLogin() {
+  clearMessages()
+  loading.value = true
+
+  try {
+    await auth.login(loginForm.value)
+    loginForm.value = createLoginForm()
+    await router.replace('/feed')
+  } catch (e) {
+    error.value = e.response?.data?.message || '로그인에 실패했습니다.'
+  } finally {
+    loading.value = false
+  }
 }
 
 async function handleRegister() {
-  error.value = ''
-  success.value = ''
+  clearMessages()
   loading.value = true
+
   try {
+    const email = registerForm.value.email
     await authApi.register(registerForm.value)
-    success.value = '회원가입 완료! 로그인 페이지로 이동합니다.'
-    registerForm.value = { name: '', email: '', password: '', role: 'STUDENT' }
+    success.value = '회원가입이 완료되었습니다. 로그인해 주세요.'
+    registerForm.value = createRegisterForm()
+    loginForm.value.email = email
+
     setTimeout(() => {
       showRegister.value = false
       success.value = ''
-    }, 2000)
+    }, 1500)
   } catch (e) {
     error.value = e.response?.data?.message || '회원가입에 실패했습니다.'
   } finally {
@@ -122,99 +166,225 @@ async function handleRegister() {
   display: flex;
   align-items: stretch;
 }
+
 .login-layout {
   display: grid;
   grid-template-columns: 1fr 1fr;
   width: 100%;
   min-height: 100vh;
 }
+
 .login-left {
-  background: linear-gradient(160deg, #1a4f8a 0%, #185FA5 50%, #1e7bc4 100%);
   padding: 48px;
   display: flex;
   flex-direction: column;
-  gap: 48px;
+  gap: 90px;
+  background: #181b20;
 }
-.brand { display: flex; align-items: center; gap: 10px; }
-.brand-logo { width: 40px; height: 40px; border-radius: 10px; object-fit: contain; }
-.brand-name { font-size: 18px; font-weight: 700; color: #fff; }
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.brand-mark {
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.brand-name {
+  color: #fff;
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+}
+
+.brand-content {
+  width: min(100%, 520px);
+}
+
+.eyebrow {
+  margin: 0 0 16px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.11em;
+}
+
 .brand-content h2 {
-  font-size: 32px; font-weight: 700; color: #fff;
-  line-height: 1.35; margin-bottom: 14px;
+  margin: 0 0 18px;
+  color: #fff;
+  font-size: 34px;
+  font-weight: 700;
+  line-height: 1.34;
+  letter-spacing: -0.04em;
 }
-.brand-content p { font-size: 15px; color: rgba(255,255,255,0.75); margin-bottom: 28px; }
-.feature-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
-.feature-list li { display: flex; align-items: center; gap: 10px; font-size: 14px; color: rgba(255,255,255,0.85); }
-.dot { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,255,255,0.6); flex-shrink: 0; }
+
+.brand-content > p:not(.eyebrow) {
+  max-width: 470px;
+  margin: 0 0 30px;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 14px;
+  line-height: 1.8;
+}
+
+.feature-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.feature-list li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+}
+
+.dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.65);
+  flex-shrink: 0;
+}
 
 .login-right {
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 48px;
-  background: var(--color-bg-primary);
+  background: #fff;
 }
-.login-box { width: 100%; max-width: 400px; }
-.back-link {
-  display: inline-block;
+
+.login-box {
+  width: 100%;
+  max-width: 400px;
+}
+
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.section-title {
+  margin: 0 0 4px;
+  color: #1d2025;
+  font-size: 22px;
+  font-weight: 700;
+}
+
+.section-desc {
+  margin: 0 0 4px;
+  color: #737a84;
   font-size: 13px;
-  color: var(--color-text-secondary);
-  margin-bottom: 32px;
-  transition: var(--transition);
+  line-height: 1.7;
 }
-.back-link:hover { color: var(--color-primary); }
 
-.section { display: flex; flex-direction: column; gap: 16px; }
-.section-title { font-size: 22px; font-weight: 700; color: var(--color-text-primary); margin-bottom: 4px; }
-.section-desc { font-size: 14px; color: var(--color-text-secondary); margin-bottom: 4px; }
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
 
-.form { display: flex; flex-direction: column; gap: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 6px; }
-.form-label { font-size: 13px; font-weight: 500; color: var(--color-text-secondary); }
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-label {
+  color: #646b75;
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .form-input {
-  padding: 10px 14px;
-  border: 1.5px solid var(--color-border);
-  border-radius: var(--radius-md);
-  font-size: 14px;
-  font-family: var(--font-sans);
-  color: var(--color-text-primary);
-  background: var(--color-bg-primary);
-  transition: var(--transition);
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 1px solid #ccd1d7;
+  border-radius: 0;
   outline: none;
+  background: #fff;
+  color: #1d2025;
+  font: inherit;
+  font-size: 14px;
 }
-.form-input:focus { border-color: var(--color-primary); box-shadow: 0 0 0 3px var(--color-primary-light); }
-.btn-full { width: 100%; padding: 12px; font-size: 15px; justify-content: center; margin-top: 4px; }
+
+.form-input:focus {
+  border-bottom-color: #1d2025;
+}
+
+.btn-full {
+  width: 100%;
+  margin-top: 6px;
+  justify-content: center;
+}
 
 .switch-link {
-  text-align: center;
-  font-size: 13px;
-  color: var(--color-text-secondary);
   margin-top: 4px;
+  text-align: center;
+  color: #7a818b;
+  font-size: 12px;
 }
+
 .text-btn {
-  background: none;
-  border: none;
-  color: var(--color-primary);
-  font-size: 13px;
-  font-weight: 500;
-  cursor: pointer;
   padding: 0 2px;
+  background: none;
+  color: #25292f;
+  font-size: 12px;
+  font-weight: 700;
   text-decoration: underline;
 }
-.error-msg {
-  padding: 10px 14px;
-  background: #fef2f2;
-  border: 1px solid #fecaca;
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  color: #dc2626;
-}
+
+.error-msg,
 .success-msg {
-  padding: 10px 14px;
-  background: #f0fdf4;
-  border: 1px solid #bbf7d0;
-  border-radius: var(--radius-md);
-  font-size: 13px;
-  color: #16a34a;
+  padding: 10px 12px;
+  border-left: 2px solid;
+  font-size: 12px;
+}
+
+.error-msg {
+  border-color: #b54e4e;
+  background: #fff7f7;
+  color: #a23e3e;
+}
+
+.success-msg {
+  border-color: #4d826f;
+  background: #f4faf7;
+  color: #3b6c5c;
+}
+
+@media (max-width: 760px) {
+  .login-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .login-left {
+    min-height: 330px;
+    gap: 48px;
+    padding: 32px;
+  }
+
+  .brand-content h2 {
+    font-size: 28px;
+  }
+
+  .login-right {
+    padding: 42px 32px 64px;
+  }
 }
 </style>

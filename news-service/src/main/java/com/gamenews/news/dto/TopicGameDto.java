@@ -13,6 +13,8 @@ import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 public class TopicGameDto {
 
@@ -46,7 +48,7 @@ public class TopicGameDto {
         @JsonProperty("isPrimary")
         private boolean isPrimary;
         private BigDecimal relevanceScore;
-        private LocalDateTime createdAt;
+        private OffsetDateTime createdAt;
 
         public static TopicGameResponse from(TopicGame topicGame) {
             return TopicGameResponse.builder()
@@ -56,8 +58,13 @@ public class TopicGameDto {
                     .gameName(topicGame.getGame().getName())
                     .isPrimary(topicGame.isPrimary())
                     .relevanceScore(topicGame.getRelevanceScore())
-                    .createdAt(topicGame.getCreatedAt())
+                    .createdAt(toUtc(topicGame.getCreatedAt()))
                     .build();
         }
     }
+
+    private static OffsetDateTime toUtc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
+    }
+
 }

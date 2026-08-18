@@ -9,6 +9,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 public class GameDto {
 
@@ -46,8 +48,8 @@ public class GameDto {
         private String genre;
         private String platform;
         private String imageUrl;
-        private LocalDateTime createdAt;
-        private LocalDateTime updatedAt;
+        private OffsetDateTime createdAt;
+        private OffsetDateTime updatedAt;
 
         public static GameResponse from(Game game) {
             return GameResponse.builder()
@@ -57,9 +59,13 @@ public class GameDto {
                     .genre(game.getGenre())
                     .platform(game.getPlatform())
                     .imageUrl(game.getImageUrl())
-                    .createdAt(game.getCreatedAt())
-                    .updatedAt(game.getUpdatedAt())
+                    .createdAt(toUtc(game.getCreatedAt()))
+                    .updatedAt(toUtc(game.getUpdatedAt()))
                     .build();
         }
+    }
+
+    private static OffsetDateTime toUtc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
     }
 }

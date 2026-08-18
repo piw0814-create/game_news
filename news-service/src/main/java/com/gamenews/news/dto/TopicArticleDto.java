@@ -8,6 +8,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 
 public class TopicArticleDto {
 
@@ -31,7 +33,7 @@ public class TopicArticleDto {
         private Long articleId;
         private String articleTitle;
         private String sourceName;
-        private LocalDateTime createdAt;
+        private OffsetDateTime createdAt;
 
         public static TopicArticleResponse from(TopicArticle topicArticle) {
             return TopicArticleResponse.builder()
@@ -40,8 +42,13 @@ public class TopicArticleDto {
                     .articleId(topicArticle.getArticle().getId())
                     .articleTitle(topicArticle.getArticle().getTitle())
                     .sourceName(topicArticle.getArticle().getSourceName())
-                    .createdAt(topicArticle.getCreatedAt())
+                    .createdAt(toUtc(topicArticle.getCreatedAt()))
                     .build();
         }
     }
+
+    private static OffsetDateTime toUtc(LocalDateTime value) {
+        return value == null ? null : value.atOffset(ZoneOffset.UTC);
+    }
+
 }

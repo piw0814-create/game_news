@@ -11,8 +11,13 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
+import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -25,7 +30,7 @@ public class TopicService {
 
     @Transactional
     public TopicDto.TopicResponse createTopic(TopicDto.CreateRequest request) {
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
 
         Topic topic = Topic.builder()
                 .title(request.getTitle().trim())
@@ -37,12 +42,37 @@ public class TopicService {
                 .lastUpdatedAt(now)
                 .build();
 
-        return TopicDto.TopicResponse.from(topicRepository.save(topic));
+        Topic saved = topicRepository.save(topic);
+        return TopicDto.TopicResponse.from(saved, List.of(), calculateRecencyBonus(saved.getLastUpdatedAt(), now));
     }
 
     public List<TopicDto.TopicResponse> getAllTopics() {
-        return topicRepository.findAllByOrderByLastUpdatedAtDesc().stream()
-                .map(TopicDto.TopicResponse::from)
+        List<Topic> topics = topicRepository.findAllByOrderByLastUpdatedAtDesc();
+        if (topics.isEmpty()) {
+            return List.of();
+        }
+
+        List<Long> topicIds = topics.stream()
+                .map(Topic::getId)
+                .toList();
+
+        Map<Long, List<Long>> gameIdsByTopicId = topicGameRepository.findGameIdsByTopicIds(topicIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        TopicGameRepository.TopicGameIdView::getTopicId,
+                        Collectors.mapping(
+                                TopicGameRepository.TopicGameIdView::getGameId,
+                                Collectors.toList()
+                        )
+                ));
+
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        return topics.stream()
+                .map(topic -> TopicDto.TopicResponse.from(
+                        topic,
+                        gameIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
+                        calculateRecencyBonus(topic.getLastUpdatedAt(), now)
+                ))
                 .toList();
     }
 
@@ -59,6 +89,25 @@ public class TopicService {
     private Topic findTopicById(Long id) {
         return topicRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("Topic을 찾을 수 없습니다: " + id));
+    }
+
+    private int calculateRecencyBonus(LocalDateTime lastUpdatedAt, LocalDateTime now) {
+        if (lastUpdatedAt == null) {
+            return 0;
+        }
+
+        long hours = Math.max(0, Duration.between(lastUpdatedAt, now).toHours());
+
+        if (hours <= 24) {
+            return 10;
+        }
+        if (hours <= 72) {
+            return 6;
+        }
+        if (hours <= 168) {
+            return 3;
+        }
+        return 0;
     }
 
     private String trimToNull(String value) {

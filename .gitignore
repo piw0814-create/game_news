@@ -1,1 +1,31 @@
 infra-images.tar
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Java / Gradle
+**/.gradle/
+**/build/
+**/bin/
+
+# Frontend
+**/node_modules/
+**/dist/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Editor
+.vscode/
