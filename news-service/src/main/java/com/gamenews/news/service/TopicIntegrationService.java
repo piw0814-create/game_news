@@ -17,8 +17,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -37,26 +40,50 @@ public class TopicIntegrationService {
         List<ArticleGame> articleGames = articleGameRepository
                 .findAllByArticle_IdOrderByPrimaryDescCreatedAtAsc(article.getId());
 
-        if (articleGames.isEmpty()) {
-            return List.of();
-        }
-
-        List<Long> gameIds = articleGames.stream()
-                .map(articleGame -> articleGame.getGame().getId())
-                .distinct()
-                .toList();
-
         LocalDateTime referenceTime = article.getPublishedAt() != null
                 ? article.getPublishedAt()
                 : article.getCollectedAt();
         LocalDateTime cutoff = referenceTime.minusHours(request.getWindowHours());
 
-        return topicRepository
-                .findCandidatesByGameIdsAndUpdatedAfter(
-                        gameIds,
-                        cutoff,
-                        PageRequest.of(0, request.getLimit()))
-                .stream()
+        List<Topic> candidates = new ArrayList<>();
+        Set<Long> candidateIds = new LinkedHashSet<>();
+
+        if (!articleGames.isEmpty()) {
+            List<Long> gameIds = articleGames.stream()
+                    .map(articleGame -> articleGame.getGame().getId())
+                    .distinct()
+                    .toList();
+
+            List<Topic> gameCandidates = topicRepository
+                    .findCandidatesByGameIdsAndUpdatedAfter(
+                            gameIds,
+                            cutoff,
+                            PageRequest.of(0, request.getLimit()));
+
+            for (Topic topic : gameCandidates) {
+                if (candidateIds.add(topic.getId())) {
+                    candidates.add(topic);
+                }
+            }
+        }
+
+        if (candidates.size() < request.getLimit()) {
+            List<Topic> recentCandidates = topicRepository
+                    .findRecentCandidatesUpdatedAfter(
+                            cutoff,
+                            PageRequest.of(0, request.getLimit()));
+
+            for (Topic topic : recentCandidates) {
+                if (candidates.size() >= request.getLimit()) {
+                    break;
+                }
+                if (candidateIds.add(topic.getId())) {
+                    candidates.add(topic);
+                }
+            }
+        }
+
+        return candidates.stream()
                 .map(TopicIntegrationDto.CandidateResponse::from)
                 .toList();
     }

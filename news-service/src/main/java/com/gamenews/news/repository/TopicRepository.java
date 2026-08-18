@@ -24,4 +24,14 @@ public interface TopicRepository extends JpaRepository<Topic, Long> {
             @Param("gameIds") List<Long> gameIds,
             @Param("cutoff") LocalDateTime cutoff,
             Pageable pageable);
+
+    @Query("""
+            select t
+            from Topic t
+            where t.lastUpdatedAt >= :cutoff
+            order by t.lastUpdatedAt desc
+            """)
+    List<Topic> findRecentCandidatesUpdatedAfter(
+            @Param("cutoff") LocalDateTime cutoff,
+            Pageable pageable);
 }

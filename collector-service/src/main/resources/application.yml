@@ -13,19 +13,96 @@ eureka:
     prefer-ip-address: true
 
 collector:
+  schedule:
+    enabled: ${COLLECTOR_SCHEDULER_ENABLED:true}
+    initial-delay: ${COLLECTOR_SCHEDULER_INITIAL_DELAY:10000}
+    fixed-delay: ${COLLECTOR_SCHEDULER_FIXED_DELAY:600000}
+
   sources:
     pcgamer:
+      name: PC Gamer
+      source-type: MEDIA
       rss-url: ${PCGAMER_RSS_URL:https://www.pcgamer.com/rss/}
       enabled: ${PCGAMER_SCHEDULER_ENABLED:true}
       limit: ${PCGAMER_SCHEDULER_LIMIT:10}
-      initial-delay: ${PCGAMER_SCHEDULER_INITIAL_DELAY:10000}
-      fixed-delay: ${PCGAMER_SCHEDULER_FIXED_DELAY:600000}
+
     destructoid:
+      name: Destructoid
+      source-type: MEDIA
       rss-url: ${DESTRUCTOID_RSS_URL:https://www.destructoid.com/feed/}
       enabled: ${DESTRUCTOID_SCHEDULER_ENABLED:true}
       limit: ${DESTRUCTOID_SCHEDULER_LIMIT:10}
-      initial-delay: ${DESTRUCTOID_SCHEDULER_INITIAL_DELAY:20000}
-      fixed-delay: ${DESTRUCTOID_SCHEDULER_FIXED_DELAY:600000}
+
+    vgc:
+      name: VGC
+      source-type: MEDIA
+      rss-url: ${VGC_RSS_URL:https://www.videogameschronicle.com/feed/}
+      enabled: ${VGC_SCHEDULER_ENABLED:false}
+      limit: ${VGC_SCHEDULER_LIMIT:5}
+
+    kotaku:
+      name: Kotaku
+      source-type: MEDIA
+      rss-url: ${KOTAKU_RSS_URL:https://kotaku.com/feed}
+      enabled: ${KOTAKU_SCHEDULER_ENABLED:false}
+      limit: ${KOTAKU_SCHEDULER_LIMIT:5}
+
+    gematsu:
+      name: Gematsu
+      source-type: MEDIA
+      rss-url: ${GEMATSU_RSS_URL:https://www.gematsu.com/feed}
+      enabled: ${GEMATSU_SCHEDULER_ENABLED:false}
+      limit: ${GEMATSU_SCHEDULER_LIMIT:5}
+
+    gameinformer:
+      name: Game Informer
+      source-type: MEDIA
+      rss-url: ${GAMEINFORMER_RSS_URL:https://gameinformer.com/news.xml}
+      enabled: ${GAMEINFORMER_SCHEDULER_ENABLED:false}
+      limit: ${GAMEINFORMER_SCHEDULER_LIMIT:5}
+
+    gamedeveloper:
+      name: Game Developer
+      source-type: MEDIA
+      rss-url: ${GAMEDEVELOPER_RSS_URL:https://www.gamedeveloper.com/rss.xml}
+      enabled: ${GAMEDEVELOPER_SCHEDULER_ENABLED:false}
+      limit: ${GAMEDEVELOPER_SCHEDULER_LIMIT:5}
+
+    nintendolife:
+      name: Nintendo Life
+      source-type: MEDIA
+      rss-url: ${NINTENDOLIFE_RSS_URL:https://www.nintendolife.com/feeds/latest}
+      enabled: ${NINTENDOLIFE_SCHEDULER_ENABLED:false}
+      limit: ${NINTENDOLIFE_SCHEDULER_LIMIT:5}
+
+    pushsquare:
+      name: Push Square
+      source-type: MEDIA
+      rss-url: ${PUSHSQUARE_RSS_URL:https://www.pushsquare.com/feeds/latest}
+      enabled: ${PUSHSQUARE_SCHEDULER_ENABLED:false}
+      limit: ${PUSHSQUARE_SCHEDULER_LIMIT:5}
+
+    purexbox:
+      name: Pure Xbox
+      source-type: MEDIA
+      rss-url: ${PUREXBOX_RSS_URL:https://www.purexbox.com/feeds/latest}
+      enabled: ${PUREXBOX_SCHEDULER_ENABLED:false}
+      limit: ${PUREXBOX_SCHEDULER_LIMIT:5}
+
+    xboxwire:
+      name: Xbox Wire
+      source-type: OFFICIAL
+      rss-url: ${XBOXWIRE_RSS_URL:https://news.xbox.com/en-us/feed/}
+      enabled: ${XBOXWIRE_SCHEDULER_ENABLED:false}
+      limit: ${XBOXWIRE_SCHEDULER_LIMIT:5}
+
+    playstation:
+      name: PlayStation Blog
+      source-type: OFFICIAL
+      rss-url: ${PLAYSTATION_RSS_URL:https://blog.playstation.com/feed/}
+      enabled: ${PLAYSTATION_SCHEDULER_ENABLED:false}
+      limit: ${PLAYSTATION_SCHEDULER_LIMIT:5}
+
   news-service:
     base-url: ${NEWS_SERVICE_URL:http://localhost:8082}
 
