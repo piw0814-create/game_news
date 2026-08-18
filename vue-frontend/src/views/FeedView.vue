@@ -127,11 +127,18 @@
 
         <div class="topic-list">
           <TopicCard
-            v-for="topic in otherTopics"
+            v-for="topic in visibleTopics"
             :key="topic.id"
             :topic="topic"
             :interested="hasInterestMatch(topic)"
           />
+        </div>
+
+        <div v-if="hasMoreTopics" class="load-more-wrap">
+          <button type="button" class="load-more-button" @click="loadMoreTopics">
+            더 보기
+            <span>{{ nextLoadCount }}개 더 보기</span>
+          </button>
         </div>
       </section>
     </main>
@@ -159,9 +166,12 @@ const categories = [
   { label: "기타", value: "OTHER" },
 ];
 
+const PAGE_SIZE = 20;
+
 const searchKeyword = ref("");
 const selectedCategory = ref("ALL");
 const sortType = ref("latest");
+const visibleCount = ref(PAGE_SIZE);
 
 function topicTime(topic) {
   const value = topic.lastUpdatedAt || topic.firstSeenAt || topic.createdAt;
@@ -266,16 +276,41 @@ const otherTopics = computed(() => {
   return topics.sort(compareLatest);
 });
 
+const visibleTopics = computed(() =>
+  otherTopics.value.slice(0, visibleCount.value),
+);
+
+const hasMoreTopics = computed(
+  () => visibleCount.value < otherTopics.value.length,
+);
+
+const nextLoadCount = computed(() =>
+  Math.min(PAGE_SIZE, otherTopics.value.length - visibleCount.value),
+);
+
 const sortLabel = computed(() => {
   if (sortType.value === "importance") return "중요도순";
   if (sortType.value === "personalized") return "관심순";
   return "최신순";
 });
 
+function loadMoreTopics() {
+  visibleCount.value += PAGE_SIZE;
+}
+
+function resetVisibleTopics() {
+  visibleCount.value = PAGE_SIZE;
+}
+
 function resetFilters() {
   searchKeyword.value = "";
   selectedCategory.value = "ALL";
 }
+
+watch(
+  [searchKeyword, selectedCategory, sortType],
+  resetVisibleTopics,
+);
 
 watch(
   () => interestStore.hasInterests,
@@ -487,6 +522,38 @@ onMounted(() => {
 
 .topic-list {
   border-bottom: 1px solid var(--color-border);
+}
+
+.load-more-wrap {
+  display: flex;
+  justify-content: center;
+  padding-top: 28px;
+}
+
+.load-more-button {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 9px 16px;
+  border: 1px solid #d5d9df;
+  border-radius: 3px;
+  background: #fff;
+  color: #343941;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.load-more-button:hover {
+  border-color: #aeb4bc;
+  background: #fafafa;
+}
+
+.load-more-button span {
+  color: #8a9099;
+  font-size: 11px;
+  font-weight: 400;
 }
 
 .loading-state,
