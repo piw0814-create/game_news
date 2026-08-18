@@ -1,4 +1,6 @@
-# Game News AI Intelligence Feed
+# Game Intelligence
+
+**AI-powered Game News Intelligence Feed**
 
 여러 출처의 게임 뉴스를 수집하고, 동일 사건을 하나의 `Topic`으로 묶은 뒤 AI가 요약·분류·중요도·의미를 분석하여 제공하는 게임 뉴스 인텔리전스 피드입니다.
 
