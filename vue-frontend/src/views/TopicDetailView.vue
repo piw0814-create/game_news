@@ -32,6 +32,20 @@
           <p v-if="topic.summary" class="summary">{{ topic.summary }}</p>
         </header>
 
+        <div class="interaction-bar">
+          <button
+            type="button"
+            class="like-button"
+            :class="{ liked: likeStatus.liked }"
+            :aria-pressed="likeStatus.liked"
+            :disabled="likeSubmitting || interactionLoading"
+            @click="toggleLike"
+          >
+            <span aria-hidden="true">{{ likeStatus.liked ? '♥' : '♡' }}</span>
+            <span>{{ likeStatus.count }}</span>
+          </button>
+        </div>
+
         <section v-if="topic.whyImportant" class="detail-section why-section">
           <h2>왜 중요한가</h2>
           <p>{{ topic.whyImportant }}</p>
@@ -85,19 +99,77 @@
           </div>
           <p v-else class="empty-copy">연결된 뉴스가 없습니다.</p>
         </section>
+
+        <section class="detail-section comments-section">
+          <div class="section-heading">
+            <h2>댓글</h2>
+            <span>{{ comments.length }}개</span>
+          </div>
+
+          <form class="comment-form" @submit.prevent="submitComment">
+            <textarea
+              v-model="commentText"
+              maxlength="1000"
+              rows="3"
+              placeholder="댓글을 입력하세요"
+              :disabled="commentSubmitting"
+            ></textarea>
+            <div class="comment-form-footer">
+              <span>{{ commentText.length }}/1000</span>
+              <button
+                type="submit"
+                :disabled="commentSubmitting || !commentText.trim()"
+              >
+                {{ commentSubmitting ? '등록 중' : '등록' }}
+              </button>
+            </div>
+          </form>
+
+          <p v-if="interactionError" class="interaction-error">{{ interactionError }}</p>
+          <p v-if="interactionLoading" class="empty-copy">댓글을 불러오는 중입니다.</p>
+
+          <div v-else-if="comments.length" class="comment-list">
+            <article v-for="comment in comments" :key="comment.id" class="comment-row">
+              <div class="comment-meta">
+                <strong>{{ comment.authorName }}</strong>
+                <time>{{ formatCommentTime(comment.createdAt) }}</time>
+              </div>
+              <p>{{ comment.content }}</p>
+              <button
+                v-if="comment.mine"
+                type="button"
+                class="comment-delete"
+                @click="removeComment(comment.id)"
+              >
+                삭제
+              </button>
+            </article>
+          </div>
+
+          <p v-else class="empty-copy">첫 댓글을 남겨보세요.</p>
+        </section>
       </article>
     </main>
   </div>
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import { useTopicStore } from '@/store/topic.js'
+import { topicApi } from '@/api/topic.js'
 
 const route = useRoute()
 const topicStore = useTopicStore()
+
+const comments = ref([])
+const commentText = ref('')
+const likeStatus = ref({ count: 0, liked: false })
+const interactionLoading = ref(false)
+const interactionError = ref('')
+const commentSubmitting = ref(false)
+const likeSubmitting = ref(false)
 
 const CATEGORY_LABELS = {
   RELEASE: '출시',
@@ -149,9 +221,112 @@ function formatScore(value) {
   return Number.isNaN(score) ? value : score.toFixed(2)
 }
 
+function unwrap(response) {
+  return response?.data?.data ?? response?.data
+}
+
+function formatCommentTime(value) {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+
+  return new Intl.DateTimeFormat('ko-KR', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(date)
+}
+
+async function loadInteractions() {
+  interactionLoading.value = true
+  interactionError.value = ''
+
+  try {
+    const [commentsResponse, likeResponse] = await Promise.all([
+      topicApi.getComments(route.params.id),
+      topicApi.getLikeStatus(route.params.id)
+    ])
+
+    const commentData = unwrap(commentsResponse)
+    const likeData = unwrap(likeResponse)
+    comments.value = Array.isArray(commentData) ? commentData : []
+    likeStatus.value = {
+      count: Number(likeData?.count ?? 0),
+      liked: Boolean(likeData?.liked)
+    }
+  } catch (error) {
+    console.error('[TopicDetail] 댓글/좋아요 조회 실패:', error)
+    interactionError.value = error.response?.data?.message || '댓글과 좋아요 정보를 불러오지 못했습니다.'
+  } finally {
+    interactionLoading.value = false
+  }
+}
+
+async function submitComment() {
+  const content = commentText.value.trim()
+  if (!content || commentSubmitting.value) return
+
+  commentSubmitting.value = true
+  interactionError.value = ''
+
+  try {
+    const response = await topicApi.createComment(route.params.id, content)
+    const saved = unwrap(response)
+    if (saved) comments.value = [...comments.value, saved]
+    commentText.value = ''
+  } catch (error) {
+    console.error('[TopicDetail] 댓글 등록 실패:', error)
+    interactionError.value = error.response?.data?.message || '댓글 등록에 실패했습니다.'
+  } finally {
+    commentSubmitting.value = false
+  }
+}
+
+async function removeComment(commentId) {
+  interactionError.value = ''
+
+  try {
+    await topicApi.deleteComment(route.params.id, commentId)
+    comments.value = comments.value.filter((comment) => comment.id !== commentId)
+  } catch (error) {
+    console.error('[TopicDetail] 댓글 삭제 실패:', error)
+    interactionError.value = error.response?.data?.message || '댓글 삭제에 실패했습니다.'
+  }
+}
+
+async function toggleLike() {
+  if (likeSubmitting.value) return
+
+  likeSubmitting.value = true
+  interactionError.value = ''
+
+  try {
+    const response = likeStatus.value.liked
+      ? await topicApi.unlike(route.params.id)
+      : await topicApi.like(route.params.id)
+    const data = unwrap(response)
+    likeStatus.value = {
+      count: Number(data?.count ?? 0),
+      liked: Boolean(data?.liked)
+    }
+  } catch (error) {
+    console.error('[TopicDetail] 좋아요 변경 실패:', error)
+    interactionError.value = error.response?.data?.message || '좋아요 처리에 실패했습니다.'
+  } finally {
+    likeSubmitting.value = false
+  }
+}
+
 async function loadTopic() {
+  comments.value = []
+  likeStatus.value = { count: 0, liked: false }
+  commentText.value = ''
+
   try {
     await topicStore.fetchTopic(route.params.id)
+    await loadInteractions()
   } catch {
     // 오류 상태는 store에서 화면에 표시한다.
   }
@@ -275,6 +450,36 @@ onBeforeUnmount(() => {
   line-height: 1.8;
 }
 
+.interaction-bar {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16px 0 0;
+}
+
+.like-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 11px;
+  border: 1px solid #d9dde2;
+  border-radius: 999px;
+  background: #fff;
+  color: #606771;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.like-button:hover,
+.like-button.liked {
+  border-color: #b8bec7;
+  color: #20242a;
+}
+
+.like-button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
 .section-heading {
   justify-content: space-between;
   gap: 16px;
@@ -371,6 +576,122 @@ onBeforeUnmount(() => {
   padding: 22px 2px;
   color: #9298a1;
   font-size: 13px;
+}
+
+.comment-form {
+  padding: 18px 0 20px;
+  border-bottom: 1px solid #eceef1;
+}
+
+.comment-form textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 82px;
+  padding: 12px 13px;
+  border: 1px solid #d9dde2;
+  border-radius: 4px;
+  background: #fff;
+  color: #292d33;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.6;
+  outline: none;
+}
+
+.comment-form textarea:focus {
+  border-color: #9ea5af;
+}
+
+.comment-form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.comment-form-footer span {
+  color: #a0a6ae;
+  font-size: 11px;
+}
+
+.comment-form-footer button {
+  padding: 7px 13px;
+  border: 1px solid #2c3036;
+  border-radius: 3px;
+  background: #2c3036;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.comment-form-footer button:disabled {
+  border-color: #d5d9df;
+  background: #d5d9df;
+  cursor: default;
+}
+
+.interaction-error {
+  margin: 14px 0 0;
+  color: #a34545;
+  font-size: 12px;
+}
+
+.comment-list {
+  border-bottom: 1px solid #eceef1;
+}
+
+.comment-row {
+  position: relative;
+  padding: 17px 2px;
+  border-top: 1px solid #eceef1;
+}
+
+.comment-row:first-child {
+  border-top: 0;
+}
+
+.comment-meta {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+
+.comment-meta strong {
+  color: #30343a;
+  font-size: 12px;
+}
+
+.comment-meta time {
+  color: #9aa0a8;
+  font-size: 11px;
+}
+
+.comment-row p {
+  margin: 7px 48px 0 0;
+  color: #505761;
+  font-size: 13px;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comment-delete {
+  position: absolute;
+  top: 16px;
+  right: 2px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #9a8080;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.comment-delete:hover {
+  color: #6d3f3f;
 }
 
 .detail-state {

@@ -65,7 +65,7 @@
             v-if="!topicStore.loading && !topicStore.error"
             class="topic-count"
           >
-            Topic {{ filteredTopics.length }}개
+            오늘 {{ todayTopics.length }}개
           </span>
         </div>
 
@@ -93,6 +93,14 @@
           :interested="hasInterestMatch(featuredTopic)"
           featured
         />
+
+        <div
+          v-else-if="filteredTopics.length"
+          class="message-state empty-filter-state"
+        >
+          <strong>오늘 등록된 주요 뉴스가 없습니다.</strong>
+          <p>아래 뉴스 목록에서 이전 Topic을 확인할 수 있습니다.</p>
+        </div>
 
         <div
           v-else-if="topicStore.topics.length"
@@ -167,6 +175,21 @@ function compareLatest(a, b) {
   return topicTime(b) - topicTime(a);
 }
 
+function isTodayTopic(topic) {
+  const value = topic.lastUpdatedAt || topic.firstSeenAt || topic.createdAt;
+  if (!value) return false;
+
+  const topicDate = new Date(value);
+  if (Number.isNaN(topicDate.getTime())) return false;
+
+  const today = new Date();
+  return (
+    topicDate.getFullYear() === today.getFullYear() &&
+    topicDate.getMonth() === today.getMonth() &&
+    topicDate.getDate() === today.getDate()
+  );
+}
+
 function compareImportance(a, b) {
   const importanceDiff = (b.importanceScore ?? 0) - (a.importanceScore ?? 0);
   return importanceDiff !== 0 ? importanceDiff : compareLatest(a, b);
@@ -216,17 +239,21 @@ const filteredTopics = computed(() => {
   });
 });
 
+const todayTopics = computed(() =>
+  filteredTopics.value.filter((topic) => isTodayTopic(topic)),
+);
+
 const featuredTopic = computed(() => {
-  if (!filteredTopics.value.length) return null;
-  return [...filteredTopics.value].sort(compareImportance)[0];
+  if (!todayTopics.value.length) return null;
+  return [...todayTopics.value].sort(compareImportance)[0];
 });
 
 const otherTopics = computed(() => {
-  if (!featuredTopic.value) return [];
-
-  const topics = filteredTopics.value.filter(
-    (topic) => topic.id !== featuredTopic.value.id,
-  );
+  const topics = featuredTopic.value
+    ? filteredTopics.value.filter(
+        (topic) => topic.id !== featuredTopic.value.id,
+      )
+    : [...filteredTopics.value];
 
   if (sortType.value === "importance") {
     return topics.sort(compareImportance);

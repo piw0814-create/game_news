@@ -46,6 +46,19 @@ spring:
             - Path=/api/topics,/api/topics/**
             - Method=GET
 
+        # Topic interaction - 로그인 사용자 댓글/좋아요 쓰기만 외부 공개
+        - id: topic-comment-write
+          uri: lb://news-service
+          predicates:
+            - Path=/api/topics/*/comments,/api/topics/*/comments/**
+            - Method=POST,DELETE
+
+        - id: topic-like-write
+          uri: lb://news-service
+          predicates:
+            - Path=/api/topics/*/likes
+            - Method=POST,DELETE
+
         # Interest - 로그인 사용자 관심 게임 관리
         - id: interest-service
           uri: lb://interest-service
