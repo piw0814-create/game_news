@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from app.config.settings import settings
 from app.kafka.consumer import news_created_consumer
 from app.router.topic_analysis_router import router as topic_analysis_router
+from app.service.article_recovery_service import article_recovery_service
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,6 +30,12 @@ async def lifespan(app: FastAPI):
         logger.info("[Eureka] 서비스 등록 완료")
     except Exception as exc:
         logger.warning("[Eureka] 등록 실패 (개발 환경에서 무시 가능): %s", exc)
+
+    try:
+        article_recovery_service.recover()
+    except Exception as exc:
+        # Recovery 자체 오류가 서비스/Kafka 기동을 막지 않도록 마지막 방어선을 둔다.
+        logger.exception("[ArticleRecovery] 시작 복구 실패: %s", exc)
 
     try:
         news_created_consumer.start()

@@ -28,6 +28,13 @@ class Settings(BaseSettings):
     kafka_topic_news_created: str = "news.created"
     kafka_retry_delay_seconds: float = 5.0
 
+    # 재시작 시 미완료 기사 복구
+    analysis_recovery_enabled: bool = True
+    analysis_recovery_limit: int = 20
+    analysis_recovery_processing_stale_minutes: int = 15
+    analysis_recovery_startup_retry_count: int = 10
+    analysis_recovery_startup_retry_delay_seconds: float = 3.0
+
     # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-luna"

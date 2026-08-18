@@ -40,6 +40,21 @@ class NewsServiceClient:
         data = self._request("GET", "/api/games")
         return [GameResponse.model_validate(item) for item in data]
 
+    def get_recovery_candidates(
+        self,
+        limit: int,
+        processing_stale_minutes: int,
+    ) -> List[NewsArticleResponse]:
+        data = self._request(
+            "GET",
+            "/api/internal/news/recovery-candidates",
+            params={
+                "limit": limit,
+                "processingStaleMinutes": processing_stale_minutes,
+            },
+        )
+        return [NewsArticleResponse.model_validate(item) for item in data]
+
     def get_article_games(self, article_id: int) -> List[ArticleGameResponse]:
         data = self._request("GET", f"/api/news/{article_id}/games")
         return [ArticleGameResponse.model_validate(item) for item in data]

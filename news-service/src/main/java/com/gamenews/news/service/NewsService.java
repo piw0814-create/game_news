@@ -9,6 +9,7 @@ import com.gamenews.news.kafka.NewsCreatedEvent;
 import com.gamenews.news.repository.NewsArticleRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -62,6 +63,24 @@ public class NewsService {
 
     public NewsArticleDto.NewsArticleResponse getNews(Long id) {
         return NewsArticleDto.NewsArticleResponse.from(findNewsById(id));
+    }
+
+    public List<NewsArticleDto.NewsArticleResponse> getRecoveryCandidates(
+            int limit,
+            int processingStaleMinutes) {
+        int normalizedLimit = Math.max(1, Math.min(limit, 100));
+        int normalizedStaleMinutes = Math.max(1, Math.min(processingStaleMinutes, 1440));
+        LocalDateTime staleBefore = LocalDateTime.now(ZoneOffset.UTC)
+                .minusMinutes(normalizedStaleMinutes);
+
+        return newsArticleRepository.findRecoveryCandidates(
+                        List.of(AnalysisStatus.PENDING, AnalysisStatus.FAILED),
+                        AnalysisStatus.PROCESSING,
+                        staleBefore,
+                        PageRequest.of(0, normalizedLimit))
+                .stream()
+                .map(NewsArticleDto.NewsArticleResponse::from)
+                .toList();
     }
 
     @Transactional
