@@ -76,25 +76,91 @@ GET    /api/games/{id}
 
 GET    /api/topics
 GET    /api/topics/{id}
+GET    /api/topics/{topicId}/comments
+POST   /api/topics/{topicId}/comments
+DELETE /api/topics/{topicId}/comments/{commentId}
+GET    /api/topics/{topicId}/likes
+POST   /api/topics/{topicId}/likes
+DELETE /api/topics/{topicId}/likes
 
 GET    /api/interests/games
 GET    /api/interests/game-ids
 POST   /api/interests/games/{gameId}
 DELETE /api/interests/games/{gameId}
+
+# ADMIN 전용
+GET    /api/admin/games
+GET    /api/admin/games/{id}
+PATCH  /api/admin/games/{id}
+POST   /api/admin/games/{id}/confirm
+POST   /api/admin/games/{id}/merge
+POST   /api/admin/games/{id}/reject
 ```
 
-`/api/news/**`, `/api/collector/**`, 사용자 단건 조회, Game/Topic 쓰기 API는 Gateway에 노출하지 않습니다. Collector와 Insight는 Docker 내부 네트워크에서 News Service를 직접 호출합니다. 개발 중 운영용 API를 확인해야 할 때는 로컬 호스트의 개별 서비스 포트를 사용합니다.
+`/api/news/**`, `/api/collector/**`, 사용자 단건 조회, 일반 Game/Topic 쓰기 API는 Gateway에 노출하지 않습니다. Collector와 Insight는 Docker 내부 네트워크에서 News Service를 직접 호출합니다. 개발 중 운영용 API를 확인해야 할 때는 로컬 호스트의 개별 서비스 포트를 사용합니다. `/api/admin/**`는 `ADMIN` 역할만 접근할 수 있으며 Gateway와 News Service 양쪽에서 권한을 검사합니다.
 
-개인화 Feed는 Topic의 객관적 중요도와 사용자 관심 게임을 분리해서 계산합니다.
+### 중요도 / 개인화 점수
+
+Topic의 기본 중요도는 AI 판단만으로 결정하지 않고 출처 신호를 함께 합산합니다.
+
+```text
+baseImportance
+= AI 사건 중요도(0~50)
++ 공식 출처 보너스(0 또는 8)
++ 다중 출처 보너스(0 / 4 / 8 / 12)
+- 커뮤니티 단독 패널티(0 또는 5)
+```
+
+사용자 반응은 Topic 조회 시 실시간 가산합니다.
+
+```text
+engagementBonus
+= 좋아요 1점씩, 최대 10
++ 댓글 1개당 2점, 최대 20
+
+importanceScore
+= clamp(baseImportance + engagementBonus, 0, 100)
+```
+
+개인화 Feed는 중요도 자체를 사용자별로 바꾸지 않고 별도 점수로 정렬합니다.
 
 ```text
 personalizedScore
 = importanceScore
-+ interestBonus
-+ recencyBonus
++ 관심 게임 보너스(30)
++ 최신성 보너스(최대 10)
 ```
 
 `personalizedScore`는 DB에 저장하지 않고 Vue에서 Feed 정렬에 사용합니다. 상단 `오늘 주요뉴스`는 개인화하지 않고 `importanceScore` 기준으로 유지합니다.
+
+## 수집 / 자동 분석 운영
+
+Collector는 현재 12개 RSS 소스를 지원합니다.
+
+```text
+MEDIA
+PC Gamer / Destructoid / VGC / Kotaku / Gematsu / Game Informer
+Game Developer / Nintendo Life / Push Square / Pure Xbox
+
+OFFICIAL
+Xbox Wire / PlayStation Blog
+```
+
+기본 자동 수집은 출처별 최대 10건씩 10분 간격으로 실행합니다. Collector 재기동 시에는 출처별 DB 최신 `publishedAt`을 기준선으로 삼아 RSS에서 최대 50건까지 확인하고, 기준선 이후 후보만 URL 중복 검사를 거쳐 저장합니다. 기준선이 없는 초기 수집은 과거 전체를 채우지 않고 일반 수집과 동일하게 최신 10건만 저장합니다.
+
+Insight Service는 `news.created`를 기사 1건씩 처리하고, 시작 시 `PENDING`, `FAILED`, 오래된 `PROCESSING` 기사를 복구합니다. Topic 동일사건 판단 AI 응답을 파싱하지 못하는 경우에는 기사 전체를 실패시키지 않고 새 Topic 생성으로 fallback합니다.
+
+## AI 게임 자동등록 / 관리자 검수
+
+기사 분석 중 기존 Game과 일치하지 않는 게임이 발견되면 confidence에 따라 자동등록합니다.
+
+```text
+confidence >= 0.90        → AI_CREATED
+0.60 <= confidence < 0.90 → REVIEW_REQUIRED
+confidence < 0.60         → 자동등록하지 않음
+```
+
+자동등록된 Game은 즉시 `ArticleGame`으로 기사에 연결되어 파이프라인을 계속 진행합니다. 관리자는 `/admin/games` 화면에서 수정, 확정, 병합, 거절할 수 있으며 확정 시 `CONFIRMED` 상태가 됩니다. 병합/거절 시 News Service 관계뿐 아니라 Interest Service의 `UserGame` 참조도 함께 정리합니다.
 
 ## 실행 전 준비
 
@@ -211,7 +277,7 @@ Vue → Authorization: Bearer <token> → API Gateway → 서명/만료 검증
 API Gateway → X-User-Id / X-User-Email → 내부 서비스
 ```
 
-현재 게임뉴스 기능에는 별도 Role 권한 분기가 없으므로 사용자 Role 컬럼과 Role claim을 두지 않습니다. 관리자 기능이 실제로 필요해질 때 `USER / ADMIN` 같은 권한 모델을 별도로 설계합니다.
+사용자 역할은 `USER / ADMIN`으로 구분합니다. 회원가입 사용자는 항상 `USER`로 생성되며 JWT의 `role` claim에 역할이 포함됩니다. 관리자 API는 API Gateway에서 `ROLE_ADMIN`을 검사하고 News Service에서도 다시 `ADMIN` 권한을 검증합니다. 관리자 지정은 회원가입 요청으로 받을 수 없으며 운영자가 DB 등 관리 경로에서 별도로 지정합니다.
 
 API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `insight-service`까지의 개발용 포트 `8081~8085`는 Docker Compose에서 `127.0.0.1`에만 바인딩하여 같은 PC에서는 테스트할 수 있지만 외부 네트워크에서 직접 접근하지 못하도록 제한합니다. 운영 배포에서는 개별 서비스의 host port publish 자체를 제거하고 내부 네트워크에서만 접근하도록 구성하는 것이 권장됩니다.
 
@@ -225,6 +291,13 @@ API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `in
 - 외부 API 응답에서는 UTC `LocalDateTime`을 `OffsetDateTime`으로 변환해 `Z` 또는 `+00:00` offset을 명시한다.
 - Vue는 `new Date(...)`로 offset이 포함된 ISO-8601 값을 브라우저 로컬 시간(KST 등)으로 표시한다.
 - `recencyBonus`와 Topic 후보 시간 비교는 모두 동일한 UTC 기준으로 계산한다.
+
+## 후속 개선 항목
+
+현재 MVP 이후 개선 대상으로 다음을 남겨둡니다.
+
+- Game metadata enrichment: publisher / developer / genre / platform / image 보강
+- Game alias / 지역별 표시명: 글로벌 원제와 한국 공식명 등 별칭을 분리 관리
 
 ## Development Notes
 
