@@ -3,6 +3,8 @@ package com.gamenews.news.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -16,6 +18,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 @Entity
@@ -46,6 +49,22 @@ public class Game {
     @Column(name = "image_url", length = 1000)
     private String imageUrl;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "registration_source", nullable = false, length = 20)
+    private GameRegistrationSource registrationSource = GameRegistrationSource.MANUAL;
+
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "review_status", nullable = false, length = 30)
+    private GameReviewStatus reviewStatus = GameReviewStatus.CONFIRMED;
+
+    @Column(name = "registration_confidence", precision = 5, scale = 4)
+    private BigDecimal registrationConfidence;
+
+    @Column(name = "source_article_id")
+    private Long sourceArticleId;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -53,4 +72,36 @@ public class Game {
     @LastModifiedDate
     @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
+
+    public void updateDetails(
+            String name,
+            String publisher,
+            String genre,
+            String platform,
+            String imageUrl) {
+        if (name != null) {
+            this.name = name;
+        }
+        if (publisher != null) {
+            this.publisher = trimToNull(publisher);
+        }
+        if (genre != null) {
+            this.genre = trimToNull(genre);
+        }
+        if (platform != null) {
+            this.platform = trimToNull(platform);
+        }
+        if (imageUrl != null) {
+            this.imageUrl = trimToNull(imageUrl);
+        }
+    }
+
+    public void confirmReview() {
+        this.reviewStatus = GameReviewStatus.CONFIRMED;
+    }
+
+    private String trimToNull(String value) {
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
 }

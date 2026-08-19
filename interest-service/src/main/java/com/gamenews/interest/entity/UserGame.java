@@ -42,4 +42,9 @@ public class UserGame {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public void changeGameId(Long gameId) {
+        this.gameId = gameId;
+    }
 }
+

@@ -5,7 +5,9 @@ import com.gamenews.news.entity.Topic;
 import com.gamenews.news.entity.TopicArticle;
 import com.gamenews.news.entity.TopicGame;
 import com.gamenews.news.repository.TopicArticleRepository;
+import com.gamenews.news.repository.TopicCommentRepository;
 import com.gamenews.news.repository.TopicGameRepository;
+import com.gamenews.news.repository.TopicLikeRepository;
 import com.gamenews.news.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -24,9 +26,15 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class TopicService {
 
+    private static final int LIKE_BONUS_CAP = 10;
+    private static final int COMMENT_BONUS_CAP = 20;
+    private static final int COMMENT_BONUS_PER_COUNT = 2;
+
     private final TopicRepository topicRepository;
     private final TopicArticleRepository topicArticleRepository;
     private final TopicGameRepository topicGameRepository;
+    private final TopicLikeRepository topicLikeRepository;
+    private final TopicCommentRepository topicCommentRepository;
 
     @Transactional
     public TopicDto.TopicResponse createTopic(TopicDto.CreateRequest request) {
@@ -46,7 +54,15 @@ public class TopicService {
                 .build();
 
         Topic saved = topicRepository.save(topic);
-        return TopicDto.TopicResponse.from(saved, List.of(), calculateRecencyBonus(saved.getLastUpdatedAt(), now));
+        return TopicDto.TopicResponse.from(
+                saved,
+                List.of(),
+                calculateRecencyBonus(saved.getLastUpdatedAt(), now),
+                saved.getImportanceScore(),
+                0,
+                0,
+                0
+        );
     }
 
     public List<TopicDto.TopicResponse> getAllTopics() {
@@ -69,13 +85,37 @@ public class TopicService {
                         )
                 ));
 
+        Map<Long, Long> likeCountByTopicId = topicLikeRepository.countByTopicIds(topicIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        TopicLikeRepository.TopicInteractionCountView::getTopicId,
+                        TopicLikeRepository.TopicInteractionCountView::getCount
+                ));
+
+        Map<Long, Long> commentCountByTopicId = topicCommentRepository.countByTopicIds(topicIds)
+                .stream()
+                .collect(Collectors.toMap(
+                        TopicCommentRepository.TopicInteractionCountView::getTopicId,
+                        TopicCommentRepository.TopicInteractionCountView::getCount
+                ));
+
         LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
         return topics.stream()
-                .map(topic -> TopicDto.TopicResponse.from(
-                        topic,
-                        gameIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
-                        calculateRecencyBonus(topic.getLastUpdatedAt(), now)
-                ))
+                .map(topic -> {
+                    long likeCount = likeCountByTopicId.getOrDefault(topic.getId(), 0L);
+                    long commentCount = commentCountByTopicId.getOrDefault(topic.getId(), 0L);
+                    int engagementBonus = calculateEngagementBonus(likeCount, commentCount);
+
+                    return TopicDto.TopicResponse.from(
+                            topic,
+                            gameIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
+                            calculateRecencyBonus(topic.getLastUpdatedAt(), now),
+                            calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
+                            likeCount,
+                            commentCount,
+                            engagementBonus
+                    );
+                })
                 .toList();
     }
 
@@ -86,7 +126,19 @@ public class TopicService {
         List<TopicArticle> topicArticles = topicArticleRepository
                 .findAllByTopic_IdOrderByCreatedAtAsc(id);
 
-        return TopicDto.TopicDetailResponse.from(topic, topicGames, topicArticles);
+        long likeCount = topicLikeRepository.countByTopic_Id(id);
+        long commentCount = topicCommentRepository.countByTopic_Id(id);
+        int engagementBonus = calculateEngagementBonus(likeCount, commentCount);
+
+        return TopicDto.TopicDetailResponse.from(
+                topic,
+                topicGames,
+                topicArticles,
+                calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
+                likeCount,
+                commentCount,
+                engagementBonus
+        );
     }
 
     private Topic findTopicById(Long id) {
@@ -111,6 +163,22 @@ public class TopicService {
             return 3;
         }
         return 0;
+    }
+
+    private int calculateEngagementBonus(long likeCount, long commentCount) {
+        int likeBonus = (int) Math.min(LIKE_BONUS_CAP, Math.max(0, likeCount));
+        int commentBonus = (int) Math.min(
+                COMMENT_BONUS_CAP,
+                Math.max(0, commentCount) * COMMENT_BONUS_PER_COUNT
+        );
+        return likeBonus + commentBonus;
+    }
+
+    private Integer calculateFinalImportance(Integer baseImportanceScore, int engagementBonus) {
+        if (baseImportanceScore == null) {
+            return null;
+        }
+        return Math.max(0, Math.min(100, baseImportanceScore + engagementBonus));
     }
 
     private String trimToNull(String value) {

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 class TopicAnalysisService:
     """Topic 전체 AI 분석과 객관적 중요도 보정을 담당한다."""
 
-    OFFICIAL_BONUS = 5
+    OFFICIAL_BONUS = 8
     COMMUNITY_ONLY_PENALTY = 5
 
     def reanalyze(self, topic_id: int) -> TopicReanalysisResponse:
@@ -110,11 +110,11 @@ class TopicAnalysisService:
         }
         source_count = len(unique_sources)
         if source_count >= 4:
-            source_bonus = 6
+            source_bonus = 12
         elif source_count == 3:
-            source_bonus = 4
+            source_bonus = 8
         elif source_count == 2:
-            source_bonus = 2
+            source_bonus = 4
         else:
             source_bonus = 0
 

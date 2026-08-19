@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS users (
     email       VARCHAR(255)    NOT NULL UNIQUE,
     password    VARCHAR(255)    NOT NULL,
     name        VARCHAR(100)    NOT NULL,
+    role        VARCHAR(20)     NOT NULL DEFAULT 'USER' COMMENT 'USER | ADMIN',
     created_at  DATETIME(6),
     updated_at  DATETIME(6),
     PRIMARY KEY (id)
@@ -18,9 +19,13 @@ CREATE TABLE IF NOT EXISTS games (
     name        VARCHAR(255)    NOT NULL UNIQUE,
     publisher   VARCHAR(255),
     genre       VARCHAR(100),
-    platform    VARCHAR(255),
-    image_url   VARCHAR(1000),
-    created_at  DATETIME(6)     NOT NULL,
+    platform                VARCHAR(255),
+    image_url               VARCHAR(1000),
+    registration_source     VARCHAR(20)     NOT NULL DEFAULT 'MANUAL' COMMENT 'MANUAL | AI',
+    review_status           VARCHAR(30)     NOT NULL DEFAULT 'CONFIRMED' COMMENT 'CONFIRMED | AI_CREATED | REVIEW_REQUIRED',
+    registration_confidence DECIMAL(5,4),
+    source_article_id       BIGINT,
+    created_at              DATETIME(6)     NOT NULL,
     updated_at  DATETIME(6)     NOT NULL,
     PRIMARY KEY (id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

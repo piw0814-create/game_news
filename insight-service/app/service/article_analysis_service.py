@@ -2,6 +2,7 @@ import logging
 
 from app.client.news_client import NewsServiceError, news_client
 from app.client.openai_client import openai_article_analyzer
+from app.config.settings import settings
 from app.model.schemas import AnalysisStatus
 from app.service.topic_analysis_service import topic_analysis_service
 from app.service.topic_integration_service import topic_integration_service
@@ -66,7 +67,7 @@ class ArticleAnalysisService:
                 )
                 return True
 
-            self._link_existing_games(article_id, analysis, games)
+            self._link_games(article_id, analysis, games)
 
             topic_result = topic_integration_service.integrate(article, analysis)
             logger.info(
@@ -117,7 +118,7 @@ class ArticleAnalysisService:
             )
             return self._mark_failed(article_id)
 
-    def _link_existing_games(self, article_id: int, analysis, games) -> None:
+    def _link_games(self, article_id: int, analysis, games) -> None:
         game_by_name = {game.name.strip().casefold(): game for game in games}
         existing_links = news_client.get_article_games(article_id)
         existing_game_ids = {link.gameId for link in existing_links}
@@ -125,12 +126,10 @@ class ArticleAnalysisService:
         for related_game in analysis.relatedGames:
             matched = game_by_name.get(related_game.name.strip().casefold())
             if matched is None:
-                logger.info(
-                    "[ArticleAnalysis] 미등록 게임 자동 생성 안 함 - articleId=%s game=%s",
-                    article_id,
-                    related_game.name,
-                )
-                continue
+                matched = self._resolve_unregistered_game(article_id, related_game)
+                if matched is None:
+                    continue
+                game_by_name[matched.name.strip().casefold()] = matched
 
             if matched.id in existing_game_ids:
                 logger.info(
@@ -153,6 +152,47 @@ class ArticleAnalysisService:
                 matched.id,
                 related_game.confidenceScore,
             )
+
+    def _resolve_unregistered_game(self, article_id: int, related_game):
+        confidence = related_game.confidenceScore
+        review_threshold = settings.game_review_create_confidence_threshold
+        auto_threshold = settings.game_auto_create_confidence_threshold
+
+        if confidence < review_threshold:
+            logger.info(
+                "[ArticleAnalysis] 미등록 게임 신뢰도 부족으로 생성 생략 - "
+                "articleId=%s game=%s confidence=%.2f threshold=%.2f",
+                article_id,
+                related_game.name,
+                confidence,
+                review_threshold,
+            )
+            return None
+
+        review_status = (
+            "AI_CREATED"
+            if confidence >= auto_threshold
+            else "REVIEW_REQUIRED"
+        )
+
+        result = news_client.resolve_or_create_ai_game(
+            name=related_game.name,
+            review_status=review_status,
+            registration_confidence=confidence,
+            source_article_id=article_id,
+        )
+
+        logger.info(
+            "[ArticleAnalysis] 미등록 게임 resolve-or-create - "
+            "articleId=%s gameId=%s game=%s created=%s reviewStatus=%s confidence=%.2f",
+            article_id,
+            result.game.id,
+            result.game.name,
+            result.created,
+            result.game.reviewStatus or review_status,
+            confidence,
+        )
+        return result.game
 
     def _mark_failed(self, article_id: int) -> bool:
         try:

@@ -59,6 +59,15 @@ class OpenAITopicMatcher:
 
         result = response.output_parsed
         if result is None:
+            output_text = (getattr(response, "output_text", "") or "").strip()
+            logger.error(
+                "[OpenAITopicMatcher] Structured Output 파싱 실패 - articleId=%s responseId=%s status=%s incompleteDetails=%s outputText=%r",
+                article.id,
+                getattr(response, "id", None),
+                getattr(response, "status", None),
+                getattr(response, "incomplete_details", None),
+                output_text[:500],
+            )
             raise RuntimeError("OpenAI Topic Structured Output을 파싱하지 못했습니다")
 
         logger.info(

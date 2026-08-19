@@ -1,6 +1,7 @@
 package com.gamenews.user.dto;
 
 import com.gamenews.user.entity.User;
+import com.gamenews.user.entity.UserRole;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
@@ -40,6 +41,7 @@ public class UserDto {
         private Long id;
         private String email;
         private String name;
+        private UserRole role;
         private LocalDateTime createdAt;
 
         public static UserResponse from(User user) {
@@ -47,6 +49,7 @@ public class UserDto {
                     .id(user.getId())
                     .email(user.getEmail())
                     .name(user.getName())
+                    .role(user.getRole())
                     .createdAt(user.getCreatedAt())
                     .build();
         }
@@ -60,6 +63,7 @@ public class UserDto {
         private Long id;
         private String email;
         private String name;
+        private UserRole role;
         private OffsetDateTime createdAt;
 
         public static PublicUserResponse from(UserResponse user) {
@@ -67,6 +71,7 @@ public class UserDto {
                     .id(user.getId())
                     .email(user.getEmail())
                     .name(user.getName())
+                    .role(user.getRole())
                     .createdAt(toUtc(user.getCreatedAt()))
                     .build();
         }

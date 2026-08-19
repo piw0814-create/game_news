@@ -69,4 +69,36 @@ public class InterestService {
         userGameRepository.delete(userGame);
         log.info("[InterestService] 관심 게임 해제 - userId={}, gameId={}", userId, gameId);
     }
+
+    @Transactional
+    public void mergeGameReferences(Long sourceGameId, Long targetGameId) {
+        if (sourceGameId.equals(targetGameId)) {
+            return;
+        }
+
+        List<UserGame> sourceInterests = userGameRepository.findAllByGameIdOrderByIdAsc(sourceGameId);
+        int moved = 0;
+        int duplicatesRemoved = 0;
+
+        for (UserGame sourceInterest : sourceInterests) {
+            if (userGameRepository.existsByUserIdAndGameId(sourceInterest.getUserId(), targetGameId)) {
+                userGameRepository.delete(sourceInterest);
+                duplicatesRemoved++;
+            } else {
+                sourceInterest.changeGameId(targetGameId);
+                moved++;
+            }
+        }
+
+        log.info(
+                "[InterestService] Game 관심관계 병합 - sourceGameId={}, targetGameId={}, moved={}, duplicatesRemoved={}",
+                sourceGameId, targetGameId, moved, duplicatesRemoved);
+    }
+
+    @Transactional
+    public void deleteGameReferences(Long gameId) {
+        List<UserGame> interests = userGameRepository.findAllByGameIdOrderByIdAsc(gameId);
+        userGameRepository.deleteAll(interests);
+        log.info("[InterestService] Game 관심관계 제거 - gameId={}, deleted={}", gameId, interests.size());
+    }
 }

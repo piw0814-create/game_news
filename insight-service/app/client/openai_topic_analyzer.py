@@ -122,13 +122,13 @@ Output rules:
 - title: concise Korean event title representing the whole Topic, not one publisher's headline. No clickbait.
 - summary: Korean 2 to 4 sentences. Merge overlapping facts, remove repetition, and include meaningful additions from later articles.
 - category: choose exactly one of RELEASE, UPDATE, INDUSTRY, ESPORTS, EVENT, CONTROVERSY, OTHER for the event as a whole.
-- semanticImportanceScore: integer 0 to 100 measuring the importance of the concrete event itself.
-  * 0-19: trivial/minor item.
-  * 20-39: limited relevance to a narrow audience.
-  * 40-59: ordinary game news.
-  * 60-79: meaningful change for the affected game/service/users.
-  * 80-89: major event with substantial product/service/industry consequences supported by the supplied facts.
-  * 90-100: exceptional event with very large direct consequences clearly supported by the supplied facts.
+- semanticImportanceScore: integer 0 to 50 measuring the importance of the concrete event itself.
+  * 0-9: trivial/minor item.
+  * 10-19: limited relevance to a narrow audience.
+  * 20-29: ordinary game news.
+  * 30-39: meaningful change for the affected game/service/users.
+  * 40-44: major event with substantial product/service/industry consequences supported by the supplied facts.
+  * 45-50: exceptional event with very large direct consequences clearly supported by the supplied facts.
 - Do NOT raise semanticImportanceScore because there are many articles, because a source is OFFICIAL, or because you recognize a famous game/company. Code handles source/article signals separately.
 - whyImportant: Korean 1 to 2 sentences explaining the consequence or practical impact. Do not repeat the summary.
 - Source provenance rule: only an article explicitly labeled `Source type: OFFICIAL` is an official source.

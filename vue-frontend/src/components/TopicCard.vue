@@ -138,13 +138,15 @@ const dateLabel = computed(() => {
 }
 
 .interest-badge {
-  padding: 3px 7px;
-  border: 1px solid #d9dde3;
+  padding: 4px 8px;
+  border: 1px solid #25292f;
   border-radius: 999px;
-  color: #555c66;
+  background: #25292f;
+  color: #fff;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
   line-height: 1.2;
+  letter-spacing: -0.01em;
 }
 
 .importance {

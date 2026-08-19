@@ -274,16 +274,11 @@ function hasInterestMatch(topic) {
 
 function personalizedScore(topic) {
   const importanceScore = topic.importanceScore ?? 0;
-  const interestBonus = hasInterestMatch(topic) ? 20 : 0;
+  const interestBonus = hasInterestMatch(topic) ? 30 : 0;
   const recencyBonus = topic.recencyBonus ?? 0;
   return importanceScore + interestBonus + recencyBonus;
 }
 function comparePersonalized(a, b) {
-  const interestDiff =
-    Number(hasInterestMatch(b)) - Number(hasInterestMatch(a));
-
-  if (interestDiff !== 0) return interestDiff;
-
   const personalizedDiff = personalizedScore(b) - personalizedScore(a);
 
   if (personalizedDiff !== 0) return personalizedDiff;

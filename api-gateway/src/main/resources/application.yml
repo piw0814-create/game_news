@@ -32,6 +32,12 @@ spring:
             - Path=/api/users/me
             - Method=GET
 
+        # Admin - 관리자 전용 API (세부 권한은 SecurityConfig에서 ADMIN 검사)
+        - id: admin-api
+          uri: lb://news-service
+          predicates:
+            - Path=/api/admin/**
+
         # Game - 사용자 조회 전용
         - id: game-read
           uri: lb://news-service

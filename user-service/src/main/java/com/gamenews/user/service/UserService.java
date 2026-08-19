@@ -2,6 +2,7 @@ package com.gamenews.user.service;
 
 import com.gamenews.user.dto.UserDto;
 import com.gamenews.user.entity.User;
+import com.gamenews.user.entity.UserRole;
 import com.gamenews.user.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -30,6 +31,7 @@ public class UserService {
                 .email(request.getEmail())
                 .password(passwordEncoder.encode(request.getPassword()))
                 .name(request.getName())
+                .role(UserRole.USER)
                 .build();
 
         User savedUser = userRepository.save(user);

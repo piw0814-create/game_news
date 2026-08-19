@@ -2,6 +2,8 @@ package com.gamenews.news.service;
 
 import com.gamenews.news.dto.GameDto;
 import com.gamenews.news.entity.Game;
+import com.gamenews.news.entity.GameRegistrationSource;
+import com.gamenews.news.entity.GameReviewStatus;
 import com.gamenews.news.repository.GameRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -17,7 +19,7 @@ public class GameService {
     private final GameRepository gameRepository;
 
     @Transactional
-    public GameDto.GameResponse createGame(GameDto.CreateRequest request) {
+    public synchronized GameDto.GameResponse createGame(GameDto.CreateRequest request) {
         String normalizedName = request.getName().trim();
 
         if (gameRepository.existsByNameIgnoreCase(normalizedName)) {
@@ -30,9 +32,45 @@ public class GameService {
                 .genre(trimToNull(request.getGenre()))
                 .platform(trimToNull(request.getPlatform()))
                 .imageUrl(trimToNull(request.getImageUrl()))
+                .registrationSource(GameRegistrationSource.MANUAL)
+                .reviewStatus(GameReviewStatus.CONFIRMED)
                 .build();
 
         return GameDto.GameResponse.from(gameRepository.save(game));
+    }
+
+    @Transactional
+    public synchronized GameDto.ResolveOrCreateResponse resolveOrCreateAiGame(
+            GameDto.ResolveOrCreateAiRequest request) {
+        String normalizedName = request.getName().trim();
+
+        Game existing = gameRepository.findByNameIgnoreCase(normalizedName).orElse(null);
+        if (existing != null) {
+            return GameDto.ResolveOrCreateResponse.builder()
+                    .created(false)
+                    .game(GameDto.GameResponse.from(existing))
+                    .build();
+        }
+
+        if (request.getReviewStatus() != GameReviewStatus.AI_CREATED
+                && request.getReviewStatus() != GameReviewStatus.REVIEW_REQUIRED) {
+            throw new IllegalArgumentException(
+                    "AI 자동 등록은 AI_CREATED 또는 REVIEW_REQUIRED 상태만 사용할 수 있습니다");
+        }
+
+        Game game = Game.builder()
+                .name(normalizedName)
+                .registrationSource(GameRegistrationSource.AI)
+                .reviewStatus(request.getReviewStatus())
+                .registrationConfidence(request.getRegistrationConfidence())
+                .sourceArticleId(request.getSourceArticleId())
+                .build();
+
+        Game saved = gameRepository.save(game);
+        return GameDto.ResolveOrCreateResponse.builder()
+                .created(true)
+                .game(GameDto.GameResponse.from(saved))
+                .build();
     }
 
     public List<GameDto.GameResponse> getAllGames() {

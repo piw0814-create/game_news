@@ -39,6 +39,12 @@ const routes = [
     name: 'MyPage',
     component: () => import('@/views/MyPageView.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/admin/games',
+    name: 'AdminGames',
+    component: () => import('@/views/AdminGamesView.vue'),
+    meta: { requiresAuth: true, requiresAdmin: true }
   }
 ]
 
@@ -55,6 +61,10 @@ router.beforeEach((to) => {
 
   if (to.meta.requiresAuth && !auth.isAuthenticated) {
     return { name: 'Login' }
+  }
+
+  if (to.meta.requiresAdmin && !auth.isAdmin) {
+    return { name: 'Feed' }
   }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {

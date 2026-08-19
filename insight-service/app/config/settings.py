@@ -44,6 +44,10 @@ class Settings(BaseSettings):
     openai_topic_match_max_output_tokens: int = 500
     openai_topic_analysis_max_output_tokens: int = 900
 
+    # 미등록 게임 AI 자동 등록
+    game_auto_create_confidence_threshold: float = 0.90
+    game_review_create_confidence_threshold: float = 0.60
+
     # Topic 자동 통합
     topic_candidate_window_hours: int = 48
     topic_candidate_db_limit: int = 10

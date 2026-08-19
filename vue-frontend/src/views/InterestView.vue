@@ -27,9 +27,10 @@
           <div class="loading-line"></div>
         </div>
 
-        <div v-else-if="interestStore.interests.length" class="game-list">
-          <article
-            v-for="interest in interestStore.interests"
+        <div v-else-if="interestStore.interests.length">
+          <div class="game-list">
+            <article
+            v-for="interest in pagedInterests"
             :key="interest.gameId"
             class="game-row"
           >
@@ -47,7 +48,26 @@
             >
               {{ interestStore.actionGameId === interest.gameId ? '해제 중...' : '관심 해제' }}
             </button>
-          </article>
+            </article>
+          </div>
+
+          <nav v-if="interestTotalPages > 1" class="pagination" aria-label="내 관심 게임 페이지">
+            <button
+              type="button"
+              :disabled="interestPage === 1"
+              @click="interestPage -= 1"
+            >
+              이전
+            </button>
+            <span>{{ interestPage }} / {{ interestTotalPages }}</span>
+            <button
+              type="button"
+              :disabled="interestPage === interestTotalPages"
+              @click="interestPage += 1"
+            >
+              다음
+            </button>
+          </nav>
         </div>
 
         <div v-else-if="!interestStore.loading" class="empty-state">
@@ -81,9 +101,10 @@
           <div class="loading-line"></div>
         </div>
 
-        <div v-else-if="filteredGames.length" class="game-list finder-list">
-          <article
-            v-for="game in filteredGames"
+        <div v-else-if="filteredGames.length">
+          <div class="game-list finder-list">
+            <article
+            v-for="game in pagedGames"
             :key="game.id"
             class="game-row"
           >
@@ -103,7 +124,26 @@
             >
               {{ interestStore.actionGameId === game.id ? '등록 중...' : '관심 등록' }}
             </button>
-          </article>
+            </article>
+          </div>
+
+          <nav v-if="gameTotalPages > 1" class="pagination" aria-label="게임 찾기 페이지">
+            <button
+              type="button"
+              :disabled="gamePage === 1"
+              @click="gamePage -= 1"
+            >
+              이전
+            </button>
+            <span>{{ gamePage }} / {{ gameTotalPages }}</span>
+            <button
+              type="button"
+              :disabled="gamePage === gameTotalPages"
+              @click="gamePage += 1"
+            >
+              다음
+            </button>
+          </nav>
         </div>
 
         <div v-else-if="interestStore.games.length" class="empty-state compact">
@@ -121,12 +161,17 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import { useInterestStore } from '@/store/interest.js'
 
 const interestStore = useInterestStore()
 const searchKeyword = ref('')
+const interestPage = ref(1)
+const gamePage = ref(1)
+
+const INTEREST_PAGE_SIZE = 8
+const GAME_PAGE_SIZE = 10
 
 const filteredGames = computed(() => {
   const keyword = searchKeyword.value.toLocaleLowerCase('ko-KR')
@@ -140,6 +185,36 @@ const filteredGames = computed(() => {
 
     return searchable.includes(keyword)
   })
+})
+
+const interestTotalPages = computed(() =>
+  Math.max(1, Math.ceil(interestStore.interests.length / INTEREST_PAGE_SIZE))
+)
+
+const pagedInterests = computed(() => {
+  const start = (interestPage.value - 1) * INTEREST_PAGE_SIZE
+  return interestStore.interests.slice(start, start + INTEREST_PAGE_SIZE)
+})
+
+const gameTotalPages = computed(() =>
+  Math.max(1, Math.ceil(filteredGames.value.length / GAME_PAGE_SIZE))
+)
+
+const pagedGames = computed(() => {
+  const start = (gamePage.value - 1) * GAME_PAGE_SIZE
+  return filteredGames.value.slice(start, start + GAME_PAGE_SIZE)
+})
+
+watch(searchKeyword, () => {
+  gamePage.value = 1
+})
+
+watch(interestTotalPages, (totalPages) => {
+  if (interestPage.value > totalPages) interestPage.value = totalPages
+})
+
+watch(gameTotalPages, (totalPages) => {
+  if (gamePage.value > totalPages) gamePage.value = totalPages
 })
 
 function gameMeta(game) {
@@ -340,9 +415,13 @@ onMounted(() => {
 
 .interest-status {
   flex: 0 0 auto;
-  color: #606770;
+  padding: 5px 9px;
+  border: 1px solid #25292f;
+  border-radius: 999px;
+  background: #25292f;
+  color: #fff;
   font-size: 11px;
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .search-box {
@@ -430,6 +509,39 @@ onMounted(() => {
 
 .loading-line.wide {
   width: 68%;
+}
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  min-height: 44px;
+  border-bottom: 1px solid #dfe2e6;
+}
+
+.pagination button {
+  padding: 5px 2px;
+  background: none;
+  color: #626a74;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.pagination button:hover:not(:disabled) {
+  color: #202329;
+}
+
+.pagination button:disabled {
+  cursor: default;
+  color: #c1c5ca;
+}
+
+.pagination span {
+  min-width: 44px;
+  color: #8a9099;
+  font-size: 10px;
+  text-align: center;
 }
 
 @media (max-width: 640px) {

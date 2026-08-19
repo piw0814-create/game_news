@@ -7,6 +7,7 @@ from app.config.settings import settings
 from app.model.schemas import (
     AnalysisStatus,
     ArticleGameResponse,
+    GameResolveOrCreateResponse,
     GameResponse,
     NewsArticleResponse,
     NewsCategory,
@@ -39,6 +40,25 @@ class NewsServiceClient:
     def get_games(self) -> List[GameResponse]:
         data = self._request("GET", "/api/games")
         return [GameResponse.model_validate(item) for item in data]
+
+    def resolve_or_create_ai_game(
+        self,
+        name: str,
+        review_status: str,
+        registration_confidence: float,
+        source_article_id: int,
+    ) -> GameResolveOrCreateResponse:
+        data = self._request(
+            "POST",
+            "/api/internal/games/resolve-or-create",
+            json={
+                "name": name,
+                "reviewStatus": review_status,
+                "registrationConfidence": registration_confidence,
+                "sourceArticleId": source_article_id,
+            },
+        )
+        return GameResolveOrCreateResponse.model_validate(data)
 
     def get_recovery_candidates(
         self,

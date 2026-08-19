@@ -38,6 +38,8 @@ eureka:
 service:
   user-service:
     url: http://user-service
+  interest-service:
+    url: ${INTEREST_SERVICE_URL:http://localhost:8083}
 
 springdoc:
   api-docs:
@@ -47,6 +49,9 @@ springdoc:
 
 # Kafka Topic
 app:
+  jwt:
+    jwk-set-uri: ${GAME_NEWS_JWK_SET_URI:http://localhost:8081/api/auth/jwks}
+    issuer: ${GAME_NEWS_JWT_ISSUER:game-news}
   kafka:
     topics:
       news-created: news.created

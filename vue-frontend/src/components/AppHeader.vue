@@ -9,6 +9,14 @@
       <nav v-if="auth.isAuthenticated" class="nav-links">
         <router-link to="/feed" class="nav-link" :class="{ active: isNewsRoute }">뉴스</router-link>
         <router-link to="/interests" class="nav-link" :class="{ active: route.name === 'Interests' }">관심 게임</router-link>
+        <router-link
+          v-if="auth.isAdmin"
+          to="/admin/games"
+          class="nav-link"
+          :class="{ active: route.name === 'AdminGames' }"
+        >
+          게임 관리
+        </router-link>
       </nav>
 
       <div class="header-actions">

@@ -37,16 +37,18 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                 String subject = jwt.getSubject();
                 String userId = extractUserId(jwt, subject);
                 String email = extractEmail(jwt, subject);
+                String role = jwt.getClaimAsString("role");
 
                 log.debug(
-                    "JWT Filter - subject: {}, userId: {}, email: {}",
-                    subject, userId, email
+                    "JWT Filter - subject: {}, userId: {}, email: {}, role: {}",
+                    subject, userId, email, role
                 );
 
                 ServerHttpRequest request = exchange.getRequest()
                     .mutate()
                     .header("X-User-Id", safe(userId))
                     .header("X-User-Email", safe(email))
+                    .header("X-User-Role", safe(role))
                     .build();
 
                 return chain.filter(

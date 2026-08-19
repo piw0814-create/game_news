@@ -13,4 +13,7 @@ public interface UserGameRepository extends JpaRepository<UserGame, Long> {
     Optional<UserGame> findByUserIdAndGameId(Long userId, Long gameId);
 
     boolean existsByUserIdAndGameId(Long userId, Long gameId);
+
+    List<UserGame> findAllByGameIdOrderByIdAsc(Long gameId);
 }
+

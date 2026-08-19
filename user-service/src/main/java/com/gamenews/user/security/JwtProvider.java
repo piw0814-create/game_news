@@ -43,6 +43,7 @@ public class JwtProvider {
                 .expiresAt(expiresAt)
                 .claim("user_id", String.valueOf(user.getId()))
                 .claim("email", user.getEmail())
+                .claim("role", user.getRole().name())
                 .build();
 
         String token = jwtEncoder.encode(JwtEncoderParameters.from(header, claims)).getTokenValue();

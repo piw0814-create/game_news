@@ -1,13 +1,19 @@
 package com.gamenews.news.dto;
 
 import com.gamenews.news.entity.Game;
+import com.gamenews.news.entity.GameRegistrationSource;
+import com.gamenews.news.entity.GameReviewStatus;
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -41,6 +47,69 @@ public class GameDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    public static class AdminUpdateRequest {
+
+        @Size(max = 255, message = "게임 이름은 255자 이하여야 합니다")
+        private String name;
+
+        @Size(max = 255, message = "퍼블리셔는 255자 이하여야 합니다")
+        private String publisher;
+
+        @Size(max = 100, message = "장르는 100자 이하여야 합니다")
+        private String genre;
+
+        @Size(max = 255, message = "플랫폼은 255자 이하여야 합니다")
+        private String platform;
+
+        @Size(max = 1000, message = "이미지 URL은 1000자 이하여야 합니다")
+        private String imageUrl;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class MergeRequest {
+
+        @NotNull(message = "병합 대상 게임 ID는 필수입니다")
+        private Long targetGameId;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ResolveOrCreateAiRequest {
+
+        @NotBlank(message = "게임 이름은 필수입니다")
+        @Size(max = 255, message = "게임 이름은 255자 이하여야 합니다")
+        private String name;
+
+        @NotNull(message = "검토 상태는 필수입니다")
+        private GameReviewStatus reviewStatus;
+
+        @NotNull(message = "등록 신뢰도는 필수입니다")
+        @DecimalMin(value = "0.0", message = "등록 신뢰도는 0 이상이어야 합니다")
+        @DecimalMax(value = "1.0", message = "등록 신뢰도는 1 이하여야 합니다")
+        private BigDecimal registrationConfidence;
+
+        @NotNull(message = "출처 기사 ID는 필수입니다")
+        private Long sourceArticleId;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class ResolveOrCreateResponse {
+        private boolean created;
+        private GameResponse game;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class GameResponse {
         private Long id;
         private String name;
@@ -48,6 +117,10 @@ public class GameDto {
         private String genre;
         private String platform;
         private String imageUrl;
+        private GameRegistrationSource registrationSource;
+        private GameReviewStatus reviewStatus;
+        private BigDecimal registrationConfidence;
+        private Long sourceArticleId;
         private OffsetDateTime createdAt;
         private OffsetDateTime updatedAt;
 
@@ -59,6 +132,10 @@ public class GameDto {
                     .genre(game.getGenre())
                     .platform(game.getPlatform())
                     .imageUrl(game.getImageUrl())
+                    .registrationSource(game.getRegistrationSource())
+                    .reviewStatus(game.getReviewStatus())
+                    .registrationConfidence(game.getRegistrationConfidence())
+                    .sourceArticleId(game.getSourceArticleId())
                     .createdAt(toUtc(game.getCreatedAt()))
                     .updatedAt(toUtc(game.getUpdatedAt()))
                     .build();

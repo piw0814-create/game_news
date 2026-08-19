@@ -58,6 +58,9 @@ public class TopicDto {
         private String whyImportant;
         private NewsCategory category;
         private Integer importanceScore;
+        private long likeCount;
+        private long commentCount;
+        private int engagementBonus;
         private List<Long> gameIds;
         private Integer recencyBonus;
         private OffsetDateTime firstSeenAt;
@@ -73,6 +76,9 @@ public class TopicDto {
                     .whyImportant(topic.getWhyImportant())
                     .category(topic.getCategory())
                     .importanceScore(topic.getImportanceScore())
+                    .likeCount(0)
+                    .commentCount(0)
+                    .engagementBonus(0)
                     .gameIds(List.of())
                     .recencyBonus(0)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))
@@ -85,14 +91,21 @@ public class TopicDto {
         public static TopicResponse from(
                 Topic topic,
                 List<Long> gameIds,
-                Integer recencyBonus) {
+                Integer recencyBonus,
+                Integer importanceScore,
+                long likeCount,
+                long commentCount,
+                int engagementBonus) {
             return TopicResponse.builder()
                     .id(topic.getId())
                     .title(topic.getTitle())
                     .summary(topic.getSummary())
                     .whyImportant(topic.getWhyImportant())
                     .category(topic.getCategory())
-                    .importanceScore(topic.getImportanceScore())
+                    .importanceScore(importanceScore)
+                    .likeCount(likeCount)
+                    .commentCount(commentCount)
+                    .engagementBonus(engagementBonus)
                     .gameIds(gameIds)
                     .recencyBonus(recencyBonus)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))
@@ -160,6 +173,9 @@ public class TopicDto {
         private String whyImportant;
         private NewsCategory category;
         private Integer importanceScore;
+        private long likeCount;
+        private long commentCount;
+        private int engagementBonus;
         private List<GameSummary> games;
         private List<ArticleSummary> articles;
         private OffsetDateTime firstSeenAt;
@@ -170,14 +186,21 @@ public class TopicDto {
         public static TopicDetailResponse from(
                 Topic topic,
                 List<TopicGame> topicGames,
-                List<TopicArticle> topicArticles) {
+                List<TopicArticle> topicArticles,
+                Integer importanceScore,
+                long likeCount,
+                long commentCount,
+                int engagementBonus) {
             return TopicDetailResponse.builder()
                     .id(topic.getId())
                     .title(topic.getTitle())
                     .summary(topic.getSummary())
                     .whyImportant(topic.getWhyImportant())
                     .category(topic.getCategory())
-                    .importanceScore(topic.getImportanceScore())
+                    .importanceScore(importanceScore)
+                    .likeCount(likeCount)
+                    .commentCount(commentCount)
+                    .engagementBonus(engagementBonus)
                     .games(topicGames.stream()
                             .map(GameSummary::from)
                             .toList())

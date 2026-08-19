@@ -5,15 +5,23 @@ import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.convert.converter.Converter;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.AbstractAuthenticationToken;
 import org.springframework.security.config.web.server.ServerHttpSecurity;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusReactiveJwtDecoder;
 import org.springframework.security.oauth2.jwt.ReactiveJwtDecoder;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.ReactiveJwtGrantedAuthoritiesConverterAdapter;
 import org.springframework.security.web.server.SecurityWebFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.reactive.CorsWebFilter;
 import org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource;
+
+import reactor.core.publisher.Mono;
 
 @Configuration
 public class SecurityConfig {
@@ -39,7 +47,7 @@ public class SecurityConfig {
             "null"
         ));
         config.setAllowedMethods(List.of(
-            "GET", "POST", "PUT", "DELETE", "OPTIONS"
+            "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
         ));
         config.setAllowedHeaders(List.of("*"));
         config.setExposedHeaders(List.of("*"));
@@ -64,9 +72,23 @@ public class SecurityConfig {
     }
 
     @Bean
+    public Converter<Jwt, Mono<AbstractAuthenticationToken>> jwtAuthenticationConverter() {
+        JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
+        authoritiesConverter.setAuthoritiesClaimName("role");
+        authoritiesConverter.setAuthorityPrefix("ROLE_");
+
+        ReactiveJwtAuthenticationConverter authenticationConverter =
+                new ReactiveJwtAuthenticationConverter();
+        authenticationConverter.setJwtGrantedAuthoritiesConverter(
+                new ReactiveJwtGrantedAuthoritiesConverterAdapter(authoritiesConverter));
+        return authenticationConverter;
+    }
+
+    @Bean
     public SecurityWebFilterChain springSecurityFilterChain(
             ServerHttpSecurity http,
-            ReactiveJwtDecoder jwtDecoder) {
+            ReactiveJwtDecoder jwtDecoder,
+            Converter<Jwt, Mono<AbstractAuthenticationToken>> jwtAuthenticationConverter) {
 
         return http
             .csrf(ServerHttpSecurity.CsrfSpec::disable)
@@ -74,10 +96,13 @@ public class SecurityConfig {
             .authorizeExchange(auth -> auth
                 .pathMatchers(HttpMethod.OPTIONS).permitAll()
                 .pathMatchers(PUBLIC_PATHS).permitAll()
+                .pathMatchers("/api/admin/**").hasAuthority("ROLE_ADMIN")
                 .anyExchange().authenticated()
             )
             .oauth2ResourceServer(oauth2 ->
-                oauth2.jwt(jwt -> jwt.jwtDecoder(jwtDecoder))
+                oauth2.jwt(jwt -> jwt
+                    .jwtDecoder(jwtDecoder)
+                    .jwtAuthenticationConverter(jwtAuthenticationConverter))
             )
             .build();
     }

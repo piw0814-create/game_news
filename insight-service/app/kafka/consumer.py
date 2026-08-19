@@ -38,6 +38,7 @@ class NewsCreatedConsumer:
                 group_id=settings.kafka_consumer_group_id,
                 auto_offset_reset="earliest",
                 enable_auto_commit=False,
+                max_poll_records=1,
                 value_deserializer=lambda m: json.loads(m.decode("utf-8")),
                 consumer_timeout_ms=1000,
             )

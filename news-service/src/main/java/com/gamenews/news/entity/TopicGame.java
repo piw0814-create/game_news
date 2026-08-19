@@ -58,4 +58,17 @@ public class TopicGame {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+
+    public void reassignGame(Game game) {
+        this.game = game;
+    }
+
+    public void absorbMetadataFrom(TopicGame other) {
+        this.primary = this.primary || other.primary;
+        if (other.relevanceScore != null
+                && (this.relevanceScore == null || other.relevanceScore.compareTo(this.relevanceScore) > 0)) {
+            this.relevanceScore = other.relevanceScore;
+        }
+    }
 }
+

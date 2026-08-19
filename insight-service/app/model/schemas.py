@@ -46,8 +46,17 @@ class GameResponse(BaseModel):
     genre: Optional[str] = None
     platform: Optional[str] = None
     imageUrl: Optional[str] = None
+    registrationSource: Optional[str] = None
+    reviewStatus: Optional[str] = None
+    registrationConfidence: Optional[float] = None
+    sourceArticleId: Optional[int] = None
     createdAt: Optional[datetime] = None
     updatedAt: Optional[datetime] = None
+
+
+class GameResolveOrCreateResponse(BaseModel):
+    created: bool
+    game: GameResponse
 
 
 class ArticleGameResponse(BaseModel):
@@ -162,8 +171,8 @@ class TopicSemanticAnalysisResult(BaseModel):
     category: NewsCategory
     semanticImportanceScore: int = Field(
         ge=0,
-        le=100,
-        description="기사 수/출처 가중치를 제외한 사건 자체의 의미 중요도",
+        le=50,
+        description="기사 수/출처/사용자 반응 가중치를 제외한 사건 자체의 AI 의미 중요도",
     )
     whyImportant: str = Field(min_length=1, description="사건의 영향이나 결과를 설명하는 한국어 1~2문장")
 

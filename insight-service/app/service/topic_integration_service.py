@@ -50,7 +50,20 @@ class TopicIntegrationService:
             [candidate.id for candidate in ai_candidates],
         )
 
-        match = openai_topic_matcher.match(article, analysis, ai_candidates)
+        try:
+            match = openai_topic_matcher.match(article, analysis, ai_candidates)
+        except Exception as exc:
+            logger.warning(
+                "[TopicIntegration] AI matcher 실패 - 새 Topic fallback - articleId=%s error=%s",
+                article.id,
+                exc,
+            )
+            return self._create_new_topic(
+                article,
+                analysis,
+                f"AI matcher failure fallback - {type(exc).__name__}",
+            )
+
         candidate_ids = {candidate.id for candidate in ai_candidates}
 
         if (
