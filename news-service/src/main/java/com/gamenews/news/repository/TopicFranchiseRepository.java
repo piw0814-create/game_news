@@ -19,14 +19,6 @@ public interface TopicFranchiseRepository extends JpaRepository<TopicFranchise, 
     List<TopicFranchise> findAllByFranchise_IdOrderByIdAsc(Long franchiseId);
 
     @Query("""
-            select tf.topic.id as topicId, tf.franchise.id as franchiseId
-            from TopicFranchise tf
-            where tf.topic.id in :topicIds
-            order by tf.topic.id asc, tf.primary desc, tf.createdAt asc
-            """)
-    List<TopicFranchiseIdView> findFranchiseIdsByTopicIds(@Param("topicIds") List<Long> topicIds);
-
-    @Query("""
             select distinct tf
             from TopicFranchise tf
             join fetch tf.topic t
@@ -37,8 +29,4 @@ public interface TopicFranchiseRepository extends JpaRepository<TopicFranchise, 
             """)
     List<TopicFranchise> findAllWithFranchiseDetailsByTopicIds(@Param("topicIds") List<Long> topicIds);
 
-    interface TopicFranchiseIdView {
-        Long getTopicId();
-        Long getFranchiseId();
-    }
 }

@@ -273,13 +273,13 @@ const DIRECT_GAME_INTEREST_BONUS = 30;
 const FRANCHISE_INTEREST_BONUS = 10;
 
 function interestMatchType(topic) {
-  const gameIds = Array.isArray(topic.gameIds) ? topic.gameIds : [];
-  if (gameIds.some((gameId) => interestStore.isInterested(gameId))) {
+  const games = Array.isArray(topic.games) ? topic.games : [];
+  if (games.some((game) => interestStore.isInterested(game?.id))) {
     return "game";
   }
 
-  const franchiseIds = Array.isArray(topic.franchiseIds) ? topic.franchiseIds : [];
-  if (franchiseIds.some((franchiseId) => interestStore.isFranchiseInterested(franchiseId))) {
+  const franchises = Array.isArray(topic.franchises) ? topic.franchises : [];
+  if (franchises.some((franchise) => interestStore.isFranchiseInterested(franchise?.id))) {
     return "franchise";
   }
 

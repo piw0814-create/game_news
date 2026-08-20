@@ -19,13 +19,6 @@ public interface TopicGameRepository extends JpaRepository<TopicGame, Long> {
     List<TopicGame> findAllByGame_IdOrderByIdAsc(Long gameId);
 
     @Query("""
-            select tg.topic.id as topicId, tg.game.id as gameId
-            from TopicGame tg
-            where tg.topic.id in :topicIds
-            """)
-    List<TopicGameIdView> findGameIdsByTopicIds(@Param("topicIds") List<Long> topicIds);
-
-    @Query("""
             select distinct tg
             from TopicGame tg
             join fetch tg.game g
@@ -34,8 +27,4 @@ public interface TopicGameRepository extends JpaRepository<TopicGame, Long> {
             """)
     List<TopicGame> findAllWithGameDetailsByTopicIds(@Param("topicIds") List<Long> topicIds);
 
-    interface TopicGameIdView {
-        Long getTopicId();
-        Long getGameId();
-    }
 }

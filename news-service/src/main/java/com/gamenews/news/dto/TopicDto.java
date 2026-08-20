@@ -8,10 +8,6 @@ import com.gamenews.news.entity.TopicGame;
 import com.gamenews.news.entity.TopicFranchise;
 import com.gamenews.news.enums.NewsCategory;
 import com.gamenews.news.enums.SourceType;
-import jakarta.validation.constraints.Max;
-import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -29,29 +25,6 @@ public class TopicDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class CreateRequest {
-
-        @NotBlank(message = "Topic 제목은 필수입니다")
-        @Size(max = 500, message = "Topic 제목은 500자 이하여야 합니다")
-        private String title;
-
-        private String summary;
-
-        private String whyImportant;
-
-        private NewsCategory category;
-
-        @Min(value = 0, message = "중요도는 0 이상이어야 합니다")
-        @Max(value = 100, message = "중요도는 100 이하여야 합니다")
-        private Integer importanceScore;
-
-        private LocalDateTime firstSeenAt;
-    }
-
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
     public static class TopicResponse {
         private Long id;
         private String title;
@@ -62,9 +35,7 @@ public class TopicDto {
         private long likeCount;
         private long commentCount;
         private int engagementBonus;
-        private List<Long> gameIds;
         private List<GameSummary> games;
-        private List<Long> franchiseIds;
         private List<FranchiseSummary> franchises;
         private Integer recencyBonus;
         private OffsetDateTime firstSeenAt;
@@ -83,9 +54,7 @@ public class TopicDto {
                     .likeCount(0)
                     .commentCount(0)
                     .engagementBonus(0)
-                    .gameIds(List.of())
                     .games(List.of())
-                    .franchiseIds(List.of())
                     .franchises(List.of())
                     .recencyBonus(0)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))
@@ -97,9 +66,7 @@ public class TopicDto {
 
         public static TopicResponse from(
                 Topic topic,
-                List<Long> gameIds,
                 List<GameSummary> games,
-                List<Long> franchiseIds,
                 List<FranchiseSummary> franchises,
                 Integer recencyBonus,
                 Integer importanceScore,
@@ -116,9 +83,7 @@ public class TopicDto {
                     .likeCount(likeCount)
                     .commentCount(commentCount)
                     .engagementBonus(engagementBonus)
-                    .gameIds(gameIds)
                     .games(games)
-                    .franchiseIds(franchiseIds)
                     .franchises(franchises)
                     .recencyBonus(recencyBonus)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))

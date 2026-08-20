@@ -1,7 +1,6 @@
 package com.gamenews.news.dto;
 
 import com.gamenews.news.entity.TopicArticle;
-import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -13,15 +12,6 @@ import java.time.ZoneOffset;
 
 public class TopicArticleDto {
 
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class CreateRequest {
-
-        @NotNull(message = "기사 ID는 필수입니다")
-        private Long articleId;
-    }
 
     @Getter
     @NoArgsConstructor

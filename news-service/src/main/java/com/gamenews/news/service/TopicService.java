@@ -39,38 +39,6 @@ public class TopicService {
     private final TopicLikeRepository topicLikeRepository;
     private final TopicCommentRepository topicCommentRepository;
 
-    @Transactional
-    public TopicDto.TopicResponse createTopic(TopicDto.CreateRequest request) {
-        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
-        LocalDateTime firstSeenAt = request.getFirstSeenAt() != null
-                ? request.getFirstSeenAt()
-                : now;
-
-        Topic topic = Topic.builder()
-                .title(request.getTitle().trim())
-                .summary(trimToNull(request.getSummary()))
-                .whyImportant(trimToNull(request.getWhyImportant()))
-                .category(request.getCategory())
-                .importanceScore(request.getImportanceScore())
-                .firstSeenAt(firstSeenAt)
-                .lastUpdatedAt(firstSeenAt)
-                .build();
-
-        Topic saved = topicRepository.save(topic);
-        return TopicDto.TopicResponse.from(
-                saved,
-                List.of(),
-                List.of(),
-                List.of(),
-                List.of(),
-                calculateRecencyBonus(saved.getLastUpdatedAt(), now),
-                saved.getImportanceScore(),
-                0,
-                0,
-                0
-        );
-    }
-
     public List<TopicDto.TopicResponse> getAllTopics() {
         List<Topic> topics = topicRepository.findAllByOrderByLastUpdatedAtDesc();
         if (topics.isEmpty()) {
@@ -81,32 +49,12 @@ public class TopicService {
                 .map(Topic::getId)
                 .toList();
 
-        Map<Long, List<Long>> gameIdsByTopicId = topicGameRepository.findGameIdsByTopicIds(topicIds)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        TopicGameRepository.TopicGameIdView::getTopicId,
-                        Collectors.mapping(
-                                TopicGameRepository.TopicGameIdView::getGameId,
-                                Collectors.toList()
-                        )
-                ));
-
         Map<Long, List<TopicDto.GameSummary>> gamesByTopicId = topicGameRepository
                 .findAllWithGameDetailsByTopicIds(topicIds)
                 .stream()
                 .collect(Collectors.groupingBy(
                         topicGame -> topicGame.getTopic().getId(),
                         Collectors.mapping(TopicDto.GameSummary::from, Collectors.toList())
-                ));
-
-        Map<Long, List<Long>> franchiseIdsByTopicId = topicFranchiseRepository.findFranchiseIdsByTopicIds(topicIds)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        TopicFranchiseRepository.TopicFranchiseIdView::getTopicId,
-                        Collectors.mapping(
-                                TopicFranchiseRepository.TopicFranchiseIdView::getFranchiseId,
-                                Collectors.toList()
-                        )
                 ));
 
         Map<Long, List<TopicDto.FranchiseSummary>> franchisesByTopicId = topicFranchiseRepository
@@ -140,9 +88,7 @@ public class TopicService {
 
                     return TopicDto.TopicResponse.from(
                             topic,
-                            gameIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             gamesByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
-                            franchiseIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             franchisesByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             calculateRecencyBonus(topic.getLastUpdatedAt(), now),
                             calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
@@ -219,12 +165,4 @@ public class TopicService {
         return Math.max(0, Math.min(100, baseImportanceScore + engagementBonus));
     }
 
-    private String trimToNull(String value) {
-        if (value == null) {
-            return null;
-        }
-
-        String trimmed = value.trim();
-        return trimmed.isEmpty() ? null : trimmed;
-    }
 }

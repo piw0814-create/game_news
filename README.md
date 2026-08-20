@@ -28,7 +28,7 @@ Insight Service
    ↓
 AI 기사 분석
    ↓
-ArticleGame
+ArticleGame / ArticleFranchise
    ↓
 동일 사건 Topic 판단
    ↓
@@ -38,6 +38,7 @@ Topic 전체 재분석
    ↓
 title / summary / category
 importanceScore / whyImportant
+TopicGame / TopicFranchise
    ↓
 Vue Topic Feed
    ↓
@@ -76,6 +77,9 @@ GET    /api/games/{id}
 
 GET    /api/topics
 GET    /api/topics/{id}
+GET    /api/topics/{topicId}/articles
+GET    /api/topics/{topicId}/games
+GET    /api/topics/{topicId}/franchises
 GET    /api/topics/{topicId}/comments
 POST   /api/topics/{topicId}/comments
 DELETE /api/topics/{topicId}/comments/{commentId}
@@ -94,10 +98,22 @@ GET    /api/admin/games/{id}
 PATCH  /api/admin/games/{id}
 POST   /api/admin/games/{id}/confirm
 POST   /api/admin/games/{id}/merge
+GET    /api/admin/games/{id}/review-context
 POST   /api/admin/games/{id}/reject
+POST   /api/admin/games/{id}/resolve-franchise
+POST   /api/admin/games/{id}/enrichment/preview
+POST   /api/admin/games/{id}/enrichment/apply
+
+GET    /api/admin/franchises
+GET    /api/admin/franchises/{id}
+POST   /api/admin/franchises
+PATCH  /api/admin/franchises/{id}
+POST   /api/admin/franchises/{id}/games
+PATCH  /api/admin/franchises/{id}/games/{gameId}
+DELETE /api/admin/franchises/{id}/games/{gameId}
 ```
 
-`/api/news/**`, `/api/collector/**`, 사용자 단건 조회, 일반 Game/Topic 쓰기 API는 Gateway에 노출하지 않습니다. Collector와 Insight는 Docker 내부 네트워크에서 News Service를 직접 호출합니다. 개발 중 운영용 API를 확인해야 할 때는 로컬 호스트의 개별 서비스 포트를 사용합니다. `/api/admin/**`는 `ADMIN` 역할만 접근할 수 있으며 Gateway와 News Service 양쪽에서 권한을 검사합니다.
+`/api/news/**`, `/api/collector/**`, 사용자 단건 조회, 일반 Game/Topic 쓰기 API는 Gateway에 노출하지 않습니다. Topic 생성과 Article/Game/Franchise 관계 반영은 Insight의 내부 Topic 통합 API가 담당하며 수동 Topic 쓰기 API는 두지 않습니다. Collector와 Insight는 Docker 내부 네트워크에서 News Service를 직접 호출합니다. 개발 중 운영용 API를 확인해야 할 때는 로컬 호스트의 개별 서비스 포트를 사용합니다. `/api/admin/**`는 `ADMIN` 역할만 접근할 수 있으며 Gateway와 News Service 양쪽에서 권한을 검사합니다.
 
 ### 중요도 / 개인화 점수
 
@@ -164,6 +180,10 @@ confidence < 0.60         → 자동등록하지 않음
 ```
 
 자동등록된 Game은 즉시 `ArticleGame`으로 기사에 연결되어 파이프라인을 계속 진행합니다. 고신뢰 AI 등록은 `CONFIRMED`로 바로 사용하되 `registrationSource=AI`, `registrationConfidence`, `sourceArticleId`를 유지해 등록 이력을 구분합니다. 중간 신뢰도만 `REVIEW_REQUIRED`로 관리자 검토 대상이 됩니다. 관리자는 `/admin/games` 화면에서 등록 출처와 관계없이 정보를 수정하거나 병합할 수 있고, 검토 필요 Game은 확정 또는 거절할 수 있습니다. 병합/거절 시 News Service 관계뿐 아니라 Interest Service의 `UserGame` 참조도 함께 정리합니다.
+
+AI는 기사에서 `SPECIFIC_GAME`, `FRANCHISE`, `UNNAMED_ENTRY`, `MIXED`, `NONE`을 구분합니다. 특정 작품이 명확할 때만 `ArticleGame`으로 연결하고, 프랜차이즈 전체 뉴스나 정식 제목이 공개되지 않은 차기작은 `ArticleFranchise`로 연결합니다. 고신뢰 AI 자동확정 Game도 관리자가 나중에 Franchise 또는 관련 없음으로 재분류할 수 있습니다.
+
+Game/Franchise 메타데이터는 IGDB로 보강합니다. Game은 canonical `name`을 유지하면서 `displayName`, aliases, publisher, developer, genre, platform, image, IGDB ID를 관리하며, 기존 수동 값을 우선 보존합니다. IGDB의 Franchise 정보는 `GameFranchise` 관계로 연결하고 관리자 화면에서 수동 수정·연결도 지원합니다.
 
 ## 실행 전 준비
 
@@ -240,6 +260,8 @@ DB 데이터까지 완전히 초기화해야 할 때만 다음을 사용합니�
 docker compose down -v
 ```
 
+기존 MariaDB 볼륨의 스키마/데이터 상태를 업그레이드할 때는 `scripts/migrate-*.sql`을 명시적으로 실행합니다. 일회성 데이터 migration/backfill을 애플리케이션 시작 코드에 남겨두지 않습니다.
+
 ## Vue 개발 서버
 
 ```bash
@@ -297,10 +319,11 @@ API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `in
 
 ## 후속 개선 항목
 
-현재 MVP 이후 개선 대상으로 다음을 남겨둡니다.
+현재 MVP 이후에는 운영 수준의 안정성과 데이터 품질 개선을 우선합니다.
 
-- Game metadata enrichment: publisher / developer / genre / platform / image 보강
-- Game alias / 지역별 표시명: 글로벌 원제와 한국 공식명 등 별칭을 분리 관리
+- Kafka 저장/발행 원자성 보강: Outbox Pattern 또는 별도 재발행 복구 작업
+- 관측/운영: 메트릭, 중앙 로그, 알림, 백업·복구 정책
+- 대량 Game/Franchise metadata enrichment의 배치 실행 및 관리자 검토 효율화
 
 ## Development Notes
 
