@@ -1,0 +1,40 @@
+services:
+  frontend:
+    build:
+      context: ./vue-frontend
+      dockerfile: Dockerfile
+    ports:
+      - "${FRONTEND_HTTP_PORT:-80}:80"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - game-news-net
+
+  mariadb:
+    restart: unless-stopped
+
+  kafka:
+    restart: unless-stopped
+
+  eureka-server:
+    restart: unless-stopped
+
+  api-gateway:
+    restart: unless-stopped
+
+  user-service:
+    restart: unless-stopped
+
+  news-service:
+    restart: unless-stopped
+
+  interest-service:
+    restart: unless-stopped
+
+  collector-service:
+    restart: unless-stopped
+
+  insight-service:
+    restart: unless-stopped

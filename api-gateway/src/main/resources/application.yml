@@ -72,6 +72,8 @@ spring:
             - Path=/api/interests/**
 
 app:
+  cors:
+    allowed-origin-patterns: ${GAME_NEWS_CORS_ALLOWED_ORIGIN_PATTERNS:http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080}
   jwt:
     jwk-set-uri: ${GAME_NEWS_JWK_SET_URI:http://localhost:8081/api/auth/jwks}
     issuer: ${GAME_NEWS_JWT_ISSUER:game-news}

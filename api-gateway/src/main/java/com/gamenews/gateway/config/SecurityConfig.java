@@ -1,5 +1,6 @@
 package com.gamenews.gateway.config;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Value;
@@ -38,14 +39,16 @@ public class SecurityConfig {
     };
 
     @Bean
-    public CorsWebFilter corsWebFilter() {
+    public CorsWebFilter corsWebFilter(
+            @Value("${app.cors.allowed-origin-patterns:http://localhost:3000,http://127.0.0.1:3000,http://localhost:8080}")
+            String allowedOriginPatterns) {
         CorsConfiguration config = new CorsConfiguration();
 
-        config.setAllowedOriginPatterns(List.of(
-            "http://localhost:3000",
-            "http://localhost:8080",
-            "null"
-        ));
+        List<String> origins = Arrays.stream(allowedOriginPatterns.split(","))
+                .map(String::trim)
+                .filter(origin -> !origin.isBlank())
+                .toList();
+        config.setAllowedOriginPatterns(origins);
         config.setAllowedMethods(List.of(
             "GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"
         ));
