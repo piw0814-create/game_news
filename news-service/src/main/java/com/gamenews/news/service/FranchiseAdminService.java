@@ -4,7 +4,6 @@ import com.gamenews.news.dto.FranchiseAdminDto;
 import com.gamenews.news.entity.ArticleFranchise;
 import com.gamenews.news.entity.Franchise;
 import com.gamenews.news.entity.FranchiseAlias;
-import com.gamenews.news.entity.FranchiseMetadataSource;
 import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.GameFranchise;
 import com.gamenews.news.entity.GameFranchiseSource;
@@ -52,23 +51,6 @@ public class FranchiseAdminService {
 
     public FranchiseAdminDto.DetailResponse getFranchise(Long franchiseId) {
         return toDetail(findFranchise(franchiseId));
-    }
-
-    @Transactional
-    public FranchiseAdminDto.DetailResponse createFranchise(FranchiseAdminDto.CreateRequest request) {
-        String name = normalizeRequiredName(request.getName());
-        String displayName = normalizeOptional(request.getDisplayName());
-        List<String> aliases = normalizeAliases(name, displayName, request.getAliases());
-        validateIdentityAvailable(null, name, displayName, aliases);
-
-        Franchise franchise = Franchise.builder()
-                .name(name)
-                .displayName(displayName)
-                .metadataSource(FranchiseMetadataSource.MANUAL)
-                .build();
-        aliases.forEach(franchise::addAlias);
-        franchiseRepository.save(franchise);
-        return toDetail(franchise);
     }
 
     @Transactional

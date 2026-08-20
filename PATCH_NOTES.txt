@@ -1,0 +1,24 @@
+IGDB automatic priority + admin UI cleanup
+
+Changes
+1) Game AUTO matching now prefers IGDB identity instead of treating every same-name variant as review-required.
+   - exact name + one IGDB record => auto
+   - multiple exact-name records + exactly one Main Game => general article auto-selects Main Game
+   - if article reason/name explicitly says Remaster/Remake/Port/Expansion/DLC/Pack, only matching game_type is eligible
+   - if the variant intent still has multiple candidates => EntityReview
+2) Existing IGDB-backed local Game is reused by igdbId.
+3) One legacy local Game with igdbId=null can absorb the selected official IGDB record instead of creating a duplicate.
+   This works both AUTO and admin IGDB candidate resolution.
+4) Admin Games no longer exposes the old REVIEW_REQUIRED confirmation branch. Ambiguous entities belong to /admin/reviews.
+   Confirmed AI catalog entries can still be reclassified as Franchise/unrelated if an old automatic classification was wrong.
+5) Entity Review candidate cards are sorted for review convenience:
+   exact identity, LOCAL+IGDB, Main Game first; variants remain visible.
+   '우선 확인' is a review hint only, not automatic proof.
+
+No DB migration.
+
+Recommended verification after apply/build
+A. Existing Fortnite review #3 UI should show IGDB Main Game #1905 near the top.
+B. Resolving review #3 with IGDB #1905 should enrich/reuse local Fortnite #27 (if it is still the sole unmapped exact local Game) rather than create a duplicate.
+C. A new high-confidence ordinary 'Fortnite' article should auto-link the Main Game and should not create EntityReview just because IGDB also contains Port/Expansion/Pack entries.
+D. An article explicitly about a remaster/port/DLC still uses that game_type only; if multiple such exact candidates remain, it goes to EntityReview.

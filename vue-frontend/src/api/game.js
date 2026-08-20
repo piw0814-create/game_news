@@ -41,10 +41,6 @@ export const gameApi = {
     return api.post(`/api/admin/games/${gameId}/enrichment/apply`, { igdbId }, { timeout: IGDB_REQUEST_TIMEOUT_MS })
   },
 
-  confirmAdmin(gameId) {
-    return api.post(`/api/admin/games/${gameId}/confirm`)
-  },
-
   mergeAdmin(sourceGameId, targetGameId) {
     return api.post(`/api/admin/games/${sourceGameId}/merge`, { targetGameId })
   },

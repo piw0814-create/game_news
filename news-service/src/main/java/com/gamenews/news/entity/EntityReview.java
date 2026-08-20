@@ -122,6 +122,14 @@ public class EntityReview {
         this.resolvedAt = LocalDateTime.now();
     }
 
+    public void reopen(String candidateJson) {
+        this.status = EntityReviewStatus.PENDING;
+        this.candidateJson = candidateJson;
+        this.resolvedGameId = null;
+        this.resolvedFranchiseId = null;
+        this.resolvedAt = null;
+    }
+
     private String trimToNull(String value) {
         if (value == null) return null;
         String trimmed = value.trim();

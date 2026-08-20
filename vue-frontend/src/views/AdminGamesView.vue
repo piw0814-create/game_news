@@ -5,9 +5,9 @@
     <main class="admin-main">
       <section class="page-heading">
         <div>
-          <p class="eyebrow">ADMIN · GAME REVIEW</p>
+          <p class="eyebrow">ADMIN · GAME CATALOG</p>
           <h1>게임 관리</h1>
-          <p>게임 기준 데이터를 확인하고 등록 출처와 관계없이 수정·병합·검토할 수 있습니다.</p>
+          <p>확정된 게임 카탈로그를 IGDB 중심으로 확인하고 수정·병합·메타데이터를 관리합니다.</p>
         </div>
         <button type="button" class="refresh-button" :disabled="loading" @click="loadGames">
           {{ loading ? '불러오는 중' : '새로고침' }}
@@ -25,17 +25,17 @@
       </div>
 
       <section class="toolbar">
-        <div class="status-tabs" role="tablist" aria-label="게임 검수 상태">
+        <div class="status-tabs" role="tablist" aria-label="게임 IGDB 연동 상태">
           <button
             v-for="tab in tabs"
             :key="tab.value"
             type="button"
             class="status-tab"
-            :class="{ active: activeStatus === tab.value }"
-            @click="activeStatus = tab.value"
+            :class="{ active: activeFilter === tab.value }"
+            @click="activeFilter = tab.value"
           >
             {{ tab.label }}
-            <span>{{ countByStatus(tab.value) }}</span>
+            <span>{{ countByFilter(tab.value) }}</span>
           </button>
         </div>
 
@@ -73,9 +73,6 @@
             <div class="game-summary">
               <div class="title-line">
                 <h3>{{ gameDisplayName(game) }}</h3>
-                <span class="status-badge" :class="statusClass(game.reviewStatus)">
-                  {{ statusLabel(game.reviewStatus) }}
-                </span>
               </div>
               <p v-if="game.displayName && game.displayName !== game.name" class="canonical-name">{{ game.name }}</p>
 
@@ -94,7 +91,7 @@
 
             <div class="row-actions">
               <button type="button" class="text-button" @click="toggleEdit(game)">수정</button>
-              <button type="button" class="text-button" @click="toggleReview(game)">검토 정보</button>
+              <button type="button" class="text-button" @click="toggleReview(game)">상세 · 관리</button>
               <button type="button" class="text-button" @click="toggleMerge(game)">병합</button>
             </div>
 
@@ -187,7 +184,7 @@
 
             <div v-if="reviewingGameId === game.id" class="inline-panel review-panel">
               <div class="panel-heading">
-                <strong>검토 판단 정보</strong>
+                <strong>게임 상세 · 관리</strong>
                 <button type="button" @click="closePanels">닫기</button>
               </div>
 
@@ -196,24 +193,15 @@
               <template v-else-if="contextFor(game.id)">
                 <section v-if="canReclassifyAiRecognition(game)" class="review-decision">
                   <div class="review-decision-heading">
-                    <strong>{{ game.reviewStatus === 'CONFIRMED' ? 'AI 자동확정 판정을 다시 분류할까요?' : '이 AI 인식을 어떻게 처리할까요?' }}</strong>
-                    <span>{{ game.reviewStatus === 'CONFIRMED' ? '등록 근거가 특정 게임이 아니었다면 프랜차이즈 또는 관련 없음으로 바로잡을 수 있습니다.' : '기사 근거를 확인한 뒤 하나를 선택하세요.' }}</span>
+                    <strong>AI 자동확정 판정을 다시 분류할까요?</strong>
+                    <span>등록 근거가 특정 게임이 아니었다면 프랜차이즈 또는 관련 없음으로 바로잡을 수 있습니다.</span>
                   </div>
 
                   <div class="decision-grid">
                     <div class="decision-card">
                       <strong>특정 게임</strong>
-                      <p>{{ game.reviewStatus === 'CONFIRMED' ? '현재 특정 게임으로 확정되어 있습니다. 이름·메타데이터가 잘못됐다면 수정/IGDB 재적용/병합을 사용하세요.' : '현재 항목이 실제 특정 작품을 가리키면 그대로 확정합니다. 필요하면 아래 IGDB 보강이나 기존 Game 병합을 먼저 사용하세요.' }}</p>
-                      <button
-                        v-if="game.reviewStatus === 'REVIEW_REQUIRED'"
-                        type="button"
-                        class="primary-button"
-                        :disabled="actionGameId === game.id"
-                        @click="confirmGame(game)"
-                      >
-                        이 게임으로 확정
-                      </button>
-                      <span v-else class="decision-current">현재 특정 게임으로 확정됨</span>
+                      <p>현재 특정 게임으로 확정되어 있습니다. 이름·메타데이터가 잘못됐다면 수정, IGDB 재적용 또는 병합을 사용하세요.</p>
+                      <span class="decision-current">현재 특정 게임으로 확정됨</span>
                     </div>
 
                     <div class="decision-card">
@@ -237,15 +225,9 @@
                           <small v-if="franchise.displayName">{{ franchise.name }}</small>
                         </button>
                       </div>
-                      <button
-                        v-else
-                        type="button"
-                        class="secondary-button"
-                        :disabled="actionGameId === game.id"
-                        @click="createAndResolveFranchise(game)"
-                      >
-                        “{{ gameDisplayName(game) }}” 프랜차이즈 등록 후 전환
-                      </button>
+                      <p v-else class="decision-empty">
+                        기존 프랜차이즈 후보가 없습니다. 신규 프랜차이즈는 기사 분석 또는 검토 큐에서 IGDB 기준으로 확정한 뒤 전환할 수 있습니다.
+                      </p>
                     </div>
 
                     <div class="decision-card danger-card">
@@ -434,7 +416,7 @@ const loading = ref(false)
 const error = ref('')
 const notice = ref('')
 const searchKeyword = ref('')
-const activeStatus = ref('REVIEW_REQUIRED')
+const activeFilter = ref('ALL')
 const editingGameId = ref(null)
 const mergingGameId = ref(null)
 const reviewingGameId = ref(null)
@@ -461,20 +443,19 @@ const editForm = reactive({
 })
 
 const tabs = [
-  { value: 'REVIEW_REQUIRED', label: '검토 필요' },
-  { value: 'CONFIRMED', label: '확정' },
-  { value: 'ALL', label: '전체' }
+  { value: 'ALL', label: '전체' },
+  { value: 'IGDB_LINKED', label: 'IGDB 연동' },
+  { value: 'IGDB_UNLINKED', label: 'IGDB 미연동' }
 ]
 
-const currentTabLabel = computed(() => tabs.find((tab) => tab.value === activeStatus.value)?.label || '게임')
+const currentTabLabel = computed(() => tabs.find((tab) => tab.value === activeFilter.value)?.label || '게임')
 
 const filteredGames = computed(() => {
   const keyword = searchKeyword.value.toLocaleLowerCase('ko-KR')
 
   return games.value.filter((game) => {
-    if (activeStatus.value !== 'ALL' && game.reviewStatus !== activeStatus.value) {
-      return false
-    }
+    if (activeFilter.value === 'IGDB_LINKED' && !game.igdbId) return false
+    if (activeFilter.value === 'IGDB_UNLINKED' && game.igdbId) return false
 
     if (!keyword) return true
 
@@ -496,7 +477,7 @@ const pagedGames = computed(() => {
   return filteredGames.value.slice(start, start + PAGE_SIZE)
 })
 
-watch([activeStatus, searchKeyword], () => {
+watch([activeFilter, searchKeyword], () => {
   currentPage.value = 1
   closePanels()
 })
@@ -536,20 +517,10 @@ async function loadGames() {
   }
 }
 
-function countByStatus(status) {
+function countByFilter(status) {
   if (status === 'ALL') return games.value.length
-  return games.value.filter((game) => game.reviewStatus === status).length
-}
-
-function statusLabel(status) {
-  return {
-    REVIEW_REQUIRED: '검토 필요',
-    CONFIRMED: '확정'
-  }[status] || status
-}
-
-function statusClass(status) {
-  return String(status || '').toLowerCase().replaceAll('_', '-')
+  if (status === 'IGDB_LINKED') return games.value.filter((game) => Boolean(game.igdbId)).length
+  return games.value.filter((game) => !game.igdbId).length
 }
 
 function sourceLabel(source) {
@@ -559,9 +530,7 @@ function sourceLabel(source) {
 }
 
 function canReclassifyAiRecognition(game) {
-  if (!game) return false
-  if (game.reviewStatus === 'REVIEW_REQUIRED') return true
-  return game.reviewStatus === 'CONFIRMED' && game.registrationSource === 'AI'
+  return Boolean(game && game.reviewStatus === 'CONFIRMED' && game.registrationSource === 'AI')
 }
 
 function confidencePercent(value) {
@@ -732,34 +701,6 @@ async function resolveAsFranchise(game, franchise) {
   }
 }
 
-async function createAndResolveFranchise(game) {
-  const confirmed = window.confirm(
-    `기존 프랜차이즈를 찾지 못했습니다. “${gameDisplayName(game)}” 이름으로 새 프랜차이즈를 등록하고 이 AI Game 인식을 전환하시겠습니까?\n연결 기사와 토픽·관심 게임 관계도 함께 정리됩니다.`
-  )
-  if (!confirmed) return
-
-  clearMessages()
-  actionGameId.value = game.id
-  try {
-    const createdResponse = await franchiseApi.createAdmin({
-      name: game.name,
-      displayName: game.displayName || '',
-      aliases: game.aliases || []
-    })
-    const created = extractData(createdResponse)
-    franchises.value.push({ ...created, gameCount: created.games?.length || 0 })
-    const response = await gameApi.resolveAdminAsFranchise(game.id, created.id)
-    const result = extractData(response)
-    games.value = games.value.filter((item) => item.id !== game.id)
-    notice.value = `${result.franchiseName} 프랜차이즈를 등록하고 연결 기사 ${result.convertedArticleCount}건을 전환했습니다.`
-    closePanels()
-  } catch (err) {
-    error.value = errorMessage(err, '프랜차이즈 등록/전환을 완료하지 못했습니다.')
-  } finally {
-    actionGameId.value = null
-  }
-}
-
 async function previewEnrichment(game) {
   clearMessages()
   enrichmentLoadingGameId.value = game.id
@@ -822,22 +763,6 @@ async function saveEdit(game) {
     closePanels()
   } catch (err) {
     error.value = errorMessage(err, '게임 정보를 수정하지 못했습니다.')
-  } finally {
-    actionGameId.value = null
-  }
-}
-
-async function confirmGame(game) {
-  clearMessages()
-  actionGameId.value = game.id
-
-  try {
-    const response = await gameApi.confirmAdmin(game.id)
-    const updated = extractData(response)
-    replaceGame(updated)
-    notice.value = `${gameDisplayName(updated)} 검수를 확정했습니다.`
-  } catch (err) {
-    error.value = errorMessage(err, '게임을 확정하지 못했습니다.')
   } finally {
     actionGameId.value = null
   }
@@ -1123,28 +1048,9 @@ onMounted(loadGames)
   letter-spacing: -0.02em;
 }
 
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  padding: 2px 6px;
-  border: 1px solid #d8dce1;
-  color: #69717b;
-  font-size: 9px;
-  font-weight: 800;
-  letter-spacing: 0.01em;
-}
-
-.status-badge.review-required {
-  border-color: #d8c7a7;
-  color: #8a682b;
-}
 
 
-.status-badge.confirmed {
-  border-color: #bdcdbf;
-  color: #58705c;
-}
+
 
 .canonical-name {
   margin: 4px 0 0;

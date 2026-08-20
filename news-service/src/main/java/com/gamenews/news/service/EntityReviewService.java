@@ -24,6 +24,9 @@ import com.gamenews.news.repository.EntityReviewRepository;
 import com.gamenews.news.repository.FranchiseRepository;
 import com.gamenews.news.repository.GameRepository;
 import com.gamenews.news.repository.NewsArticleRepository;
+import com.gamenews.news.repository.TopicArticleRepository;
+import com.gamenews.news.repository.TopicFranchiseRepository;
+import com.gamenews.news.repository.TopicGameRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -35,8 +38,10 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
@@ -58,6 +63,9 @@ public class EntityReviewService {
     private final FranchiseRepository franchiseRepository;
     private final ArticleGameRepository articleGameRepository;
     private final ArticleFranchiseRepository articleFranchiseRepository;
+    private final TopicArticleRepository topicArticleRepository;
+    private final TopicGameRepository topicGameRepository;
+    private final TopicFranchiseRepository topicFranchiseRepository;
     private final GameIdentityService gameIdentityService;
     private final GameEnrichmentService gameEnrichmentService;
     private final FranchiseService franchiseService;
@@ -74,19 +82,6 @@ public class EntityReviewService {
         }
 
         List<Game> localCandidates = gameIdentityService.findExactCandidates(request.getDetectedName());
-        if (request.getConfidenceScore().compareTo(autoThreshold) >= 0
-                && localCandidates.size() == 1
-                && localCandidates.get(0).getIgdbId() != null) {
-            Game safe = localCandidates.get(0);
-            linkGame(article, safe, request);
-            closePendingReview(article.getId(), EntityReviewKind.GAME, request.getDetectedName(), safe.getId(), null);
-            eventPublisher.publishEvent(new GameResolvedEvent(safe.getId()));
-            return EntityReviewDto.InternalResolveResponse.builder()
-                    .outcome(EntityReviewDto.ResolutionOutcome.AUTO_LINKED)
-                    .gameId(safe.getId())
-                    .build();
-        }
-
         List<IgdbClient.IgdbGame> igdbCandidates = searchGames(request.getDetectedName());
 
         if (request.getConfidenceScore().compareTo(autoThreshold) >= 0) {
@@ -103,9 +98,12 @@ public class EntityReviewService {
         }
 
         List<EntityReviewDto.Candidate> candidates = new ArrayList<>(gameCandidates(localCandidates, igdbCandidates));
+        List<IgdbClient.IgdbFranchise> igdbFranchiseCandidates = mergeFranchiseCandidates(
+                searchFranchises(request.getDetectedName()),
+                deriveFranchisesFromGames(igdbCandidates));
         candidates.addAll(franchiseCandidates(
                 findExactFranchiseCandidates(request.getDetectedName()),
-                searchFranchises(request.getDetectedName())));
+                igdbFranchiseCandidates));
         EntityReview review = createOrRefreshReview(article, EntityReviewKind.GAME, request, candidates);
         return EntityReviewDto.InternalResolveResponse.builder()
                 .outcome(EntityReviewDto.ResolutionOutcome.REVIEW_REQUIRED)
@@ -134,7 +132,10 @@ public class EntityReviewService {
                     .build();
         }
 
-        List<IgdbClient.IgdbFranchise> igdbCandidates = searchFranchises(request.getDetectedName());
+        List<IgdbClient.IgdbGame> igdbGameCandidates = searchGames(request.getDetectedName());
+        List<IgdbClient.IgdbFranchise> igdbCandidates = mergeFranchiseCandidates(
+                searchFranchises(request.getDetectedName()),
+                deriveFranchisesFromGames(igdbGameCandidates));
 
         if (request.getConfidenceScore().compareTo(autoThreshold) >= 0) {
             Franchise safe = findSafeFranchise(request.getDetectedName(), localCandidates, igdbCandidates);
@@ -152,7 +153,7 @@ public class EntityReviewService {
         List<EntityReviewDto.Candidate> candidates = new ArrayList<>(franchiseCandidates(localCandidates, igdbCandidates));
         candidates.addAll(gameCandidates(
                 gameIdentityService.findExactCandidates(request.getDetectedName()),
-                searchGames(request.getDetectedName())));
+                igdbGameCandidates));
         EntityReview review = createOrRefreshReview(article, EntityReviewKind.FRANCHISE, request, candidates);
         return EntityReviewDto.InternalResolveResponse.builder()
                 .outcome(EntityReviewDto.ResolutionOutcome.REVIEW_REQUIRED)
@@ -207,39 +208,68 @@ public class EntityReviewService {
         return toAdminResponse(saved);
     }
 
+    @Transactional
+    public EntityReviewDto.AdminResponse reopenAdmin(Long reviewId) {
+        EntityReview review = findReview(reviewId);
+        if (review.getStatus() == EntityReviewStatus.PENDING) {
+            return toAdminResponse(review);
+        }
+
+        Long topicId = rollbackResolvedRelation(review);
+        List<EntityReviewDto.Candidate> refreshedCandidates = buildCandidatesForReview(review);
+        review.reopen(writeCandidates(refreshedCandidates));
+        EntityReview saved = entityReviewRepository.save(review);
+
+        if (topicId != null) {
+            eventPublisher.publishEvent(new EntityReviewResolvedEvent(topicId));
+        }
+        return toAdminResponse(saved);
+    }
+
     private Game findSafeGame(
             EntityReviewDto.InternalResolveRequest request,
             List<Game> localCandidates,
             List<IgdbClient.IgdbGame> igdbCandidates) {
-        if (localCandidates.size() > 1) return null;
-
-        if (localCandidates.size() == 1) {
-            Game local = localCandidates.get(0);
-            if (local.getIgdbId() != null) return local;
-
-            IgdbClient.IgdbGame exact = uniqueExactGame(request.getDetectedName(), igdbCandidates);
-            if (exact == null) return null;
-            Game alreadyMapped = gameRepository.findByIgdbId(exact.getId()).orElse(null);
-            if (alreadyMapped != null && !alreadyMapped.getId().equals(local.getId())) return null;
-            try {
-                gameEnrichmentService.applyRawSnapshot(local, exact);
-                return local;
-            } catch (IllegalArgumentException ex) {
-                log.info("[EntityReview] Game auto-match rejected by catalog constraint - name={}, reason={}",
-                        request.getDetectedName(), ex.getMessage());
-                return null;
+        IgdbClient.IgdbGame preferred = preferredExactGame(request, igdbCandidates);
+        if (preferred != null) {
+            Game mapped = gameRepository.findByIgdbId(preferred.getId()).orElse(null);
+            if (mapped != null) {
+                return mapped;
             }
-        }
 
-        IgdbClient.IgdbGame exact = uniqueExactGame(request.getDetectedName(), igdbCandidates);
-        if (exact == null) return null;
-        try {
-            return upsertIgdbGame(exact, request);
-        } catch (IllegalArgumentException ex) {
-            log.info("[EntityReview] Game auto-create rejected by catalog constraint - name={}, reason={}",
-                    request.getDetectedName(), ex.getMessage());
+            // A single legacy/local identity without IGDB metadata can safely absorb the
+            // preferred official record. Multiple unmapped local rows remain an admin decision.
+            if (localCandidates.size() == 1 && localCandidates.get(0).getIgdbId() == null) {
+                Game local = localCandidates.get(0);
+                try {
+                    gameEnrichmentService.applyRawSnapshot(local, preferred);
+                    return local;
+                } catch (IllegalArgumentException ex) {
+                    log.info("[EntityReview] Game auto-match rejected by catalog constraint - name={}, reason={}",
+                            request.getDetectedName(), ex.getMessage());
+                    return null;
+                }
+            }
+
+            if (localCandidates.isEmpty()) {
+                try {
+                    return upsertIgdbGame(preferred, request);
+                } catch (IllegalArgumentException ex) {
+                    log.info("[EntityReview] Game auto-create rejected by catalog constraint - name={}, reason={}",
+                            request.getDetectedName(), ex.getMessage());
+                    return null;
+                }
+            }
             return null;
         }
+
+        // IGDB lookup can be temporarily unavailable. A single already IGDB-backed local
+        // identity is still safe to use; anything else goes to EntityReview.
+        if (igdbCandidates.isEmpty() && localCandidates.size() == 1
+                && localCandidates.get(0).getIgdbId() != null) {
+            return localCandidates.get(0);
+        }
+        return null;
     }
 
     private Franchise findSafeFranchise(
@@ -291,6 +321,23 @@ public class EntityReviewService {
                     .confidenceScore(review.getConfidenceScore())
                     .reason(review.getReason())
                     .build();
+
+            Game mapped = gameRepository.findByIgdbId(raw.getId()).orElse(null);
+            if (mapped != null) {
+                return mapped;
+            }
+
+            List<Game> exactLocal = gameIdentityService.findExactCandidates(review.getDetectedName());
+            List<Game> unmappedLocal = exactLocal.stream()
+                    .filter(game -> game.getIgdbId() == null)
+                    .toList();
+            if (exactLocal.size() == 1 && unmappedLocal.size() == 1
+                    && raw.getName() != null
+                    && raw.getName().trim().equalsIgnoreCase(review.getDetectedName().trim())) {
+                gameEnrichmentService.applyRawSnapshot(unmappedLocal.get(0), raw);
+                return unmappedLocal.get(0);
+            }
+
             return upsertIgdbGame(raw, context);
         }
         throw new IllegalArgumentException("Game 결정에는 localEntityId 또는 igdbId가 필요합니다");
@@ -428,6 +475,105 @@ public class EntityReviewService {
         return new ArrayList<>(unique.values());
     }
 
+    private List<EntityReviewDto.Candidate> buildCandidatesForReview(EntityReview review) {
+        String name = review.getDetectedName();
+        List<IgdbClient.IgdbGame> igdbGames = searchGames(name);
+        List<IgdbClient.IgdbFranchise> igdbFranchises = mergeFranchiseCandidates(
+                searchFranchises(name),
+                deriveFranchisesFromGames(igdbGames));
+
+        List<EntityReviewDto.Candidate> candidates = new ArrayList<>();
+        if (review.getEntityKind() == EntityReviewKind.FRANCHISE) {
+            candidates.addAll(franchiseCandidates(findExactFranchiseCandidates(name), igdbFranchises));
+            candidates.addAll(gameCandidates(gameIdentityService.findExactCandidates(name), igdbGames));
+        } else {
+            candidates.addAll(gameCandidates(gameIdentityService.findExactCandidates(name), igdbGames));
+            candidates.addAll(franchiseCandidates(findExactFranchiseCandidates(name), igdbFranchises));
+        }
+        return candidates;
+    }
+
+    private Long rollbackResolvedRelation(EntityReview review) {
+        Long articleId = review.getArticle().getId();
+        Long topicId = topicArticleRepository.findFirstByArticle_IdOrderByCreatedAtAsc(articleId)
+                .map(link -> link.getTopic().getId())
+                .orElse(null);
+
+        if (review.getResolvedGameId() != null) {
+            Long gameId = review.getResolvedGameId();
+            articleGameRepository.findByArticle_IdAndGame_Id(articleId, gameId)
+                    .ifPresent(articleGameRepository::delete);
+            if (topicId != null && !isGameStillUsedByTopic(topicId, gameId)) {
+                topicGameRepository.findByTopic_IdAndGame_Id(topicId, gameId)
+                        .ifPresent(topicGameRepository::delete);
+            }
+        }
+
+        if (review.getResolvedFranchiseId() != null) {
+            Long franchiseId = review.getResolvedFranchiseId();
+            articleFranchiseRepository.findByArticle_IdAndFranchise_Id(articleId, franchiseId)
+                    .ifPresent(articleFranchiseRepository::delete);
+            if (topicId != null && !isFranchiseStillUsedByTopic(topicId, franchiseId)) {
+                topicFranchiseRepository.findByTopic_IdAndFranchise_Id(topicId, franchiseId)
+                        .ifPresent(topicFranchiseRepository::delete);
+            }
+        }
+        return topicId;
+    }
+
+    private boolean isGameStillUsedByTopic(Long topicId, Long gameId) {
+        return topicArticleRepository.findAllByTopic_IdOrderByCreatedAtAsc(topicId).stream()
+                .anyMatch(link -> articleGameRepository.existsByArticle_IdAndGame_Id(
+                        link.getArticle().getId(), gameId));
+    }
+
+    private boolean isFranchiseStillUsedByTopic(Long topicId, Long franchiseId) {
+        return topicArticleRepository.findAllByTopic_IdOrderByCreatedAtAsc(topicId).stream()
+                .anyMatch(link -> articleFranchiseRepository.existsByArticle_IdAndFranchise_Id(
+                        link.getArticle().getId(), franchiseId));
+    }
+
+    private List<IgdbClient.IgdbFranchise> deriveFranchisesFromGames(List<IgdbClient.IgdbGame> games) {
+        if (games == null || games.isEmpty() || !igdbClient.isConfigured()) return List.of();
+
+        Set<Long> franchiseIds = new LinkedHashSet<>();
+        for (IgdbClient.IgdbGame game : games) {
+            if (game.getFranchise() != null && game.getFranchise().getId() != null) {
+                franchiseIds.add(game.getFranchise().getId());
+            }
+            if (game.getFranchises() != null) {
+                game.getFranchises().stream()
+                        .filter(item -> item != null && item.getId() != null)
+                        .map(IgdbClient.IgdbNamedEntity::getId)
+                        .forEach(franchiseIds::add);
+            }
+        }
+        if (franchiseIds.isEmpty()) return List.of();
+
+        try {
+            return igdbClient.getFranchisesByIds(new ArrayList<>(franchiseIds));
+        } catch (RuntimeException ex) {
+            log.warn("[EntityReview] IGDB derived Franchise lookup failed - ids={}, reason={}",
+                    franchiseIds, ex.getMessage());
+            return List.of();
+        }
+    }
+
+    private List<IgdbClient.IgdbFranchise> mergeFranchiseCandidates(
+            List<IgdbClient.IgdbFranchise> direct,
+            List<IgdbClient.IgdbFranchise> derived) {
+        Map<Long, IgdbClient.IgdbFranchise> unique = new LinkedHashMap<>();
+        if (direct != null) {
+            direct.stream().filter(item -> item != null && item.getId() != null)
+                    .forEach(item -> unique.putIfAbsent(item.getId(), item));
+        }
+        if (derived != null) {
+            derived.stream().filter(item -> item != null && item.getId() != null)
+                    .forEach(item -> unique.putIfAbsent(item.getId(), item));
+        }
+        return new ArrayList<>(unique.values());
+    }
+
     private List<IgdbClient.IgdbGame> searchGames(String name) {
         if (!igdbClient.isConfigured()) return List.of();
         try {
@@ -450,11 +596,80 @@ public class EntityReviewService {
         }
     }
 
-    private IgdbClient.IgdbGame uniqueExactGame(String detectedName, List<IgdbClient.IgdbGame> candidates) {
+    private IgdbClient.IgdbGame preferredExactGame(
+            EntityReviewDto.InternalResolveRequest request,
+            List<IgdbClient.IgdbGame> candidates) {
         List<IgdbClient.IgdbGame> exact = candidates.stream()
-                .filter(item -> item.getName() != null && item.getName().trim().equalsIgnoreCase(detectedName.trim()))
+                .filter(item -> item.getName() != null
+                        && item.getName().trim().equalsIgnoreCase(request.getDetectedName().trim()))
                 .toList();
-        return exact.size() == 1 ? exact.get(0) : null;
+        if (exact.size() == 1) {
+            return exact.get(0);
+        }
+        if (exact.isEmpty()) {
+            return null;
+        }
+
+        String variantIntent = explicitVariantIntent(request);
+        if (variantIntent != null) {
+            List<IgdbClient.IgdbGame> variantMatches = exact.stream()
+                    .filter(item -> gameTypeMatches(item, variantIntent))
+                    .toList();
+            if (variantMatches.size() == 1) {
+                return variantMatches.get(0);
+            }
+            // The article explicitly points at a variant, but IGDB still has multiple
+            // matching records. Do not silently fall back to the main game.
+            return null;
+        }
+
+        // General articles using the canonical title should resolve to the one official
+        // Main Game when all other exact-name records are ports/remasters/variants.
+        List<IgdbClient.IgdbGame> mainGames = exact.stream()
+                .filter(this::isMainGame)
+                .filter(item -> item.getVersionParent() == null)
+                .toList();
+        return mainGames.size() == 1 ? mainGames.get(0) : null;
+    }
+
+    private String explicitVariantIntent(EntityReviewDto.InternalResolveRequest request) {
+        String text = ((request.getDetectedName() == null ? "" : request.getDetectedName()) + " "
+                + (request.getReason() == null ? "" : request.getReason()))
+                .toLowerCase(Locale.ROOT);
+        if (containsAny(text, "remaster", "remastered", "리마스터")) return "remaster";
+        if (containsAny(text, "remake", "리메이크")) return "remake";
+        if (containsAny(text, "port", "ported", "포트", "이식")) return "port";
+        if (containsAny(text, "expansion", "확장팩", "확장 콘텐츠")) return "expansion";
+        if (containsAny(text, "dlc", "downloadable content", "다운로드 콘텐츠")) return "dlc";
+        if (containsAny(text, "pack", "add-on", "addon", "애드온", "팩")) return "pack";
+        return null;
+    }
+
+    private boolean gameTypeMatches(IgdbClient.IgdbGame game, String intent) {
+        if (game.getGameType() == null || game.getGameType().getType() == null) return false;
+        String type = game.getGameType().getType().toLowerCase(Locale.ROOT);
+        return switch (intent) {
+            case "remaster" -> type.contains("remaster");
+            case "remake" -> type.contains("remake");
+            case "port" -> type.contains("port");
+            case "expansion" -> type.contains("expansion");
+            case "dlc" -> type.contains("dlc");
+            case "pack" -> type.contains("pack") || type.contains("addon") || type.contains("add-on");
+            default -> false;
+        };
+    }
+
+    private boolean isMainGame(IgdbClient.IgdbGame game) {
+        return game.getGameType() != null
+                && game.getGameType().getType() != null
+                && game.getGameType().getType().equalsIgnoreCase("Main Game");
+    }
+
+    private boolean containsAny(String text, String... needles) {
+        for (String needle : needles) {
+            if (text.contains(needle)) return true;
+        }
+        return false;
     }
 
     private IgdbClient.IgdbFranchise uniqueExactFranchise(
@@ -475,8 +690,8 @@ public class EntityReviewService {
     private List<EntityReviewDto.Candidate> gameCandidates(
             List<Game> localCandidates,
             List<IgdbClient.IgdbGame> igdbCandidates) {
-        List<EntityReviewDto.Candidate> result = new ArrayList<>();
-        localCandidates.forEach(game -> result.add(EntityReviewDto.Candidate.builder()
+        Map<String, EntityReviewDto.Candidate> unique = new LinkedHashMap<>();
+        localCandidates.forEach(game -> putCandidate(unique, EntityReviewDto.Candidate.builder()
                 .source("LOCAL")
                 .entityKind(EntityReviewKind.GAME)
                 .localId(game.getId())
@@ -488,7 +703,7 @@ public class EntityReviewService {
                 .gameType(game.getIgdbGameType())
                 .versionParentIgdbId(game.getVersionParentIgdbId())
                 .build()));
-        igdbCandidates.forEach(game -> result.add(EntityReviewDto.Candidate.builder()
+        igdbCandidates.forEach(game -> putCandidate(unique, EntityReviewDto.Candidate.builder()
                 .source("IGDB")
                 .entityKind(EntityReviewKind.GAME)
                 .igdbId(game.getId())
@@ -496,14 +711,14 @@ public class EntityReviewService {
                 .gameType(game.getGameType() == null ? null : game.getGameType().getType())
                 .versionParentIgdbId(game.getVersionParent())
                 .build()));
-        return result;
+        return new ArrayList<>(unique.values());
     }
 
     private List<EntityReviewDto.Candidate> franchiseCandidates(
             List<Franchise> localCandidates,
             List<IgdbClient.IgdbFranchise> igdbCandidates) {
-        List<EntityReviewDto.Candidate> result = new ArrayList<>();
-        localCandidates.forEach(franchise -> result.add(EntityReviewDto.Candidate.builder()
+        Map<String, EntityReviewDto.Candidate> unique = new LinkedHashMap<>();
+        localCandidates.forEach(franchise -> putCandidate(unique, EntityReviewDto.Candidate.builder()
                 .source("LOCAL")
                 .entityKind(EntityReviewKind.FRANCHISE)
                 .localId(franchise.getId())
@@ -511,13 +726,62 @@ public class EntityReviewService {
                 .name(franchise.getName())
                 .displayName(franchise.getDisplayName())
                 .build()));
-        igdbCandidates.forEach(franchise -> result.add(EntityReviewDto.Candidate.builder()
+        igdbCandidates.forEach(franchise -> putCandidate(unique, EntityReviewDto.Candidate.builder()
                 .source("IGDB")
                 .entityKind(EntityReviewKind.FRANCHISE)
                 .igdbId(franchise.getId())
                 .name(franchise.getName())
                 .build()));
-        return result;
+        return new ArrayList<>(unique.values());
+    }
+
+    private void putCandidate(
+            Map<String, EntityReviewDto.Candidate> unique,
+            EntityReviewDto.Candidate candidate) {
+        String key = candidateIdentityKey(candidate);
+        EntityReviewDto.Candidate existing = unique.get(key);
+        if (existing == null) {
+            unique.put(key, candidate);
+            return;
+        }
+
+        // LOCAL catalog data and the same IGDB record represent one identity.
+        // Prefer the richer local metadata while showing that IGDB verified the identity.
+        EntityReviewDto.Candidate local = existing.getLocalId() != null ? existing
+                : candidate.getLocalId() != null ? candidate : existing;
+        EntityReviewDto.Candidate other = local == existing ? candidate : existing;
+        unique.put(key, EntityReviewDto.Candidate.builder()
+                .source(local.getLocalId() != null && local.getIgdbId() != null ? "LOCAL_IGDB" : local.getSource())
+                .entityKind(local.getEntityKind())
+                .localId(local.getLocalId())
+                .igdbId(firstNonNull(local.getIgdbId(), other.getIgdbId()))
+                .name(firstNonBlank(local.getName(), other.getName()))
+                .displayName(firstNonBlank(local.getDisplayName(), other.getDisplayName()))
+                .publisher(firstNonBlank(local.getPublisher(), other.getPublisher()))
+                .developer(firstNonBlank(local.getDeveloper(), other.getDeveloper()))
+                .gameType(firstNonBlank(local.getGameType(), other.getGameType()))
+                .versionParentIgdbId(firstNonNull(local.getVersionParentIgdbId(), other.getVersionParentIgdbId()))
+                .build());
+    }
+
+    private String candidateIdentityKey(EntityReviewDto.Candidate candidate) {
+        if (candidate.getIgdbId() != null) {
+            return candidate.getEntityKind() + ":IGDB:" + candidate.getIgdbId();
+        }
+        if (candidate.getLocalId() != null) {
+            return candidate.getEntityKind() + ":LOCAL:" + candidate.getLocalId();
+        }
+        return candidate.getEntityKind() + ":NAME:"
+                + String.valueOf(candidate.getName()).trim().toLowerCase(Locale.ROOT);
+    }
+
+    private <T> T firstNonNull(T first, T second) {
+        return first != null ? first : second;
+    }
+
+    private String firstNonBlank(String first, String second) {
+        if (first != null && !first.isBlank()) return first;
+        return second;
     }
 
     private EntityReviewDto.InternalResolveResponse ignored() {

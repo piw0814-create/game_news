@@ -41,4 +41,9 @@ public class AdminEntityReviewController {
             @Valid @RequestBody EntityReviewDto.AdminResolveRequest request) {
         return ResponseEntity.ok(ApiResponse.success(entityReviewService.resolveAdmin(id, request)));
     }
+
+    @PostMapping("/{id}/reopen")
+    public ResponseEntity<ApiResponse<EntityReviewDto.AdminResponse>> reopen(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(entityReviewService.reopenAdmin(id)));
+    }
 }

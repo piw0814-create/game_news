@@ -9,10 +9,6 @@ export const franchiseApi = {
     return api.get(`/api/admin/franchises/${franchiseId}`)
   },
 
-  createAdmin(payload) {
-    return api.post('/api/admin/franchises', payload)
-  },
-
   updateAdmin(franchiseId, payload) {
     return api.patch(`/api/admin/franchises/${franchiseId}`, payload)
   },

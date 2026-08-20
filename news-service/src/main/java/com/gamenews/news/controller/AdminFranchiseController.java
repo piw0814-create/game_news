@@ -6,7 +6,6 @@ import com.gamenews.news.service.FranchiseAdminService;
 import com.gamenews.news.service.FranchiseCatalogSyncService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,13 +36,6 @@ public class AdminFranchiseController {
     @GetMapping("/{id}")
     public ResponseEntity<ApiResponse<FranchiseAdminDto.DetailResponse>> getFranchise(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(franchiseAdminService.getFranchise(id)));
-    }
-
-    @PostMapping
-    public ResponseEntity<ApiResponse<FranchiseAdminDto.DetailResponse>> createFranchise(
-            @Valid @RequestBody FranchiseAdminDto.CreateRequest request) {
-        return ResponseEntity.status(HttpStatus.CREATED)
-                .body(ApiResponse.success(franchiseAdminService.createFranchise(request)));
     }
 
     @PatchMapping("/{id}")

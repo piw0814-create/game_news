@@ -9,7 +9,6 @@ import com.gamenews.news.entity.FranchiseMetadataSource;
 import com.gamenews.news.entity.GameFranchise;
 import com.gamenews.news.entity.GameFranchiseSource;
 import com.gamenews.news.entity.TopicFranchise;
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -24,20 +23,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 
 public class FranchiseAdminDto {
-
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class CreateRequest {
-        @NotBlank(message = "프랜차이즈 이름은 필수입니다")
-        @Size(max = 255, message = "프랜차이즈 이름은 255자 이하여야 합니다")
-        private String name;
-
-        @Size(max = 255, message = "표시 이름은 255자 이하여야 합니다")
-        private String displayName;
-
-        private List<@Size(max = 255, message = "별칭은 255자 이하여야 합니다") String> aliases;
-    }
 
     @Getter
     @NoArgsConstructor

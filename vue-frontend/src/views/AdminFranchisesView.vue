@@ -5,9 +5,9 @@
     <main class="admin-main">
       <section class="page-heading">
         <div>
-          <p class="eyebrow">ADMIN · FRANCHISE REVIEW</p>
-          <h1>프랜차이즈 검토</h1>
-          <p>IGDB 기준 정보와 연결된 게임·기사·Topic을 한 화면에서 확인하고 동기화합니다.</p>
+          <p class="eyebrow">ADMIN · FRANCHISE CATALOG</p>
+          <h1>프랜차이즈 관리</h1>
+          <p>확정된 프랜차이즈 카탈로그와 연결 게임·기사·Topic·IGDB 동기화 상태를 관리합니다.</p>
         </div>
         <button type="button" class="refresh-button" :disabled="loading" @click="loadAll">
           {{ loading ? '불러오는 중' : '새로고침' }}
@@ -20,32 +20,6 @@
       <div v-if="notice" class="message-banner notice" role="status">
         <span>{{ notice }}</span><button type="button" @click="notice = ''">닫기</button>
       </div>
-
-      <section class="create-panel">
-        <div class="section-heading compact">
-          <h2>신규 등록</h2>
-          <span>수동 등록 후 Game의 IGDB 적용 또는 병합으로 공식 정보를 연결할 수 있습니다.</span>
-        </div>
-        <form class="create-form" @submit.prevent="createFranchise">
-          <label class="field">
-            <span>기준 이름*</span>
-            <input v-model.trim="createForm.name" required placeholder="예: God of War" />
-          </label>
-          <label class="field">
-            <span>표시 이름</span>
-            <input v-model.trim="createForm.displayName" placeholder="예: 갓 오브 워" />
-          </label>
-          <label class="field full">
-            <span>별칭</span>
-            <input v-model="createForm.aliasesText" placeholder="쉼표로 구분" />
-          </label>
-          <div class="create-actions">
-            <button type="submit" class="primary-button" :disabled="saving">
-              {{ saving ? '등록 중...' : '프랜차이즈 등록' }}
-            </button>
-          </div>
-        </form>
-      </section>
 
       <section class="toolbar">
         <div class="section-title">
@@ -74,7 +48,7 @@
             <p v-if="franchise.aliases?.length" class="aliases">{{ franchise.aliases.join(' · ') }}</p>
           </div>
           <div class="row-actions">
-            <button type="button" class="text-button" @click="toggleReview(franchise)">검토</button>
+            <button type="button" class="text-button" @click="toggleReview(franchise)">상세 · 관리</button>
             <button type="button" class="text-button" @click="toggleEdit(franchise)">수정</button>
           </div>
 
@@ -93,10 +67,10 @@
 
           <div v-if="reviewingId === franchise.id" class="inline-panel review-panel">
             <div class="panel-heading">
-              <strong>프랜차이즈 검토</strong>
+              <strong>프랜차이즈 상세 · 관리</strong>
               <button type="button" @click="closePanels">닫기</button>
             </div>
-            <div v-if="detailLoadingId === franchise.id" class="empty">검토 정보를 불러오는 중...</div>
+            <div v-if="detailLoadingId === franchise.id" class="empty">상세 정보를 불러오는 중...</div>
             <template v-else-if="detailFor(franchise.id)">
               <div class="review-overview">
                 <div><small>메타데이터</small><strong>{{ sourceLabel(detailFor(franchise.id).metadataSource) }}</strong></div>
@@ -145,7 +119,7 @@
                 </div>
 
                 <label class="game-search">
-                  <span>수동 게임 추가</span>
+                  <span>소속 게임 보정</span>
                   <input v-model.trim="gameSearch" type="search" placeholder="게임명 · 별칭 검색" />
                 </label>
                 <div v-if="gameSearch" class="game-search-results">
@@ -198,7 +172,7 @@
 
         <div v-if="!loading && !filteredFranchises.length" class="empty-state">
           <strong>프랜차이즈가 없습니다.</strong>
-          <p>직접 등록하거나 IGDB 게임 메타데이터 적용으로 생성할 수 있습니다.</p>
+          <p>기사 분석 또는 검토 큐에서 확정된 프랜차이즈가 이곳에 표시됩니다.</p>
         </div>
       </section>
     </main>
@@ -207,12 +181,10 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { useRoute } from 'vue-router'
 import AppHeader from '@/components/AppHeader.vue'
 import { gameApi } from '@/api/game.js'
 import { franchiseApi } from '@/api/franchise.js'
 
-const route = useRoute()
 const franchises = ref([])
 const games = ref([])
 const loading = ref(false)
@@ -226,7 +198,6 @@ const detailLoadingId = ref(null)
 const syncingId = ref(null)
 const details = reactive({})
 const gameSearch = ref('')
-const createForm = reactive({ name: '', displayName: '', aliasesText: '' })
 const editForm = reactive({ name: '', displayName: '', aliasesText: '' })
 
 const filteredFranchises = computed(() => {
@@ -238,8 +209,8 @@ const filteredFranchises = computed(() => {
 
 function extractData(response) { return response?.data?.data ?? response?.data }
 function errorMessage(err, fallback) { return err?.response?.data?.message || err?.message || fallback }
-function sourceLabel(source) { return source === 'IGDB' ? 'IGDB' : '수동 등록' }
-function relationSourceLabel(source) { return source === 'IGDB' ? 'IGDB 관계' : source === 'MANUAL' ? '수동 관계' : '기존 관계' }
+function sourceLabel(source) { return source === 'IGDB' ? 'IGDB' : '로컬' }
+function relationSourceLabel(source) { return source === 'IGDB' ? 'IGDB 관계' : source === 'MANUAL' ? '관리자 보정' : '기존 관계' }
 function formatDate(value) { return value ? new Date(value).toLocaleString('ko-KR') : '-' }
 function parseAliases(value) {
   const seen = new Set()
@@ -262,21 +233,6 @@ async function loadAll() {
     games.value = Array.isArray(extractData(gameResponse)) ? extractData(gameResponse) : []
   } catch (err) { error.value = errorMessage(err, '프랜차이즈 정보를 불러오지 못했습니다.') }
   finally { loading.value = false }
-}
-
-async function createFranchise() {
-  saving.value = true; error.value = ''
-  try {
-    const created = extractData(await franchiseApi.createAdmin({
-      name: createForm.name,
-      displayName: createForm.displayName,
-      aliases: parseAliases(createForm.aliasesText)
-    }))
-    notice.value = `${created.displayName || created.name} 프랜차이즈를 등록했습니다.`
-    createForm.name = ''; createForm.displayName = ''; createForm.aliasesText = ''
-    await loadAll()
-  } catch (err) { error.value = errorMessage(err, '프랜차이즈를 등록하지 못했습니다.') }
-  finally { saving.value = false }
 }
 
 function toggleEdit(franchise) {
@@ -368,10 +324,7 @@ async function mergeInto(source, target) {
   } catch (err) { error.value = errorMessage(err, '프랜차이즈를 병합하지 못했습니다.') }
 }
 
-onMounted(async () => {
-  if (typeof route.query.name === 'string') createForm.name = route.query.name
-  await loadAll()
-})
+onMounted(loadAll)
 </script>
 
 <style scoped>
@@ -386,16 +339,11 @@ onMounted(async () => {
 .message-banner.error { color: #a33a3a; border-bottom-color: #e4b6b6; }
 .message-banner.notice { color: #4e5c51; }
 .message-banner button { background: none; color: #777e88; font-size: 11px; }
-.create-panel { padding: 28px 0; border-bottom: 1px solid #dfe2e6; }
-.section-heading.compact { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; }
-.section-heading h2 { margin: 0; font-size: 15px; }
-.section-heading span { color: #8b929b; font-size: 10px; }
-.create-form, .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
+.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
 .field { display: grid; gap: 6px; }
 .field.full { grid-column: 1 / -1; }
 .field span, .game-search span { color: #7b828c; font-size: 10px; font-weight: 700; }
 .field input, .game-search input, .search-box input { width: 100%; height: 36px; padding: 0 2px; border: 0; border-bottom: 1px solid #cfd3d8; outline: 0; background: transparent; font: inherit; font-size: 12px; }
-.create-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
 .toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 28px 0 10px; }
 .section-title { display: flex; gap: 8px; align-items: baseline; }
 .section-title strong { font-size: 16px; }
@@ -444,8 +392,8 @@ onMounted(async () => {
 .empty-state p { margin: 4px 0 0; }
 @media (max-width: 760px) {
   .admin-main { width: min(100% - 32px, 1040px); padding-top: 36px; }
-  .create-form, .form-grid, .franchise-row { grid-template-columns: 1fr; }
-  .field.full, .create-actions, .inline-panel { grid-column: auto; }
+  .form-grid, .franchise-row { grid-template-columns: 1fr; }
+  .field.full, .inline-panel { grid-column: auto; }
   .toolbar, .sync-row { align-items: stretch; flex-direction: column; }
   .search-box { width: 100%; }
   .row-actions { justify-content: flex-start; }

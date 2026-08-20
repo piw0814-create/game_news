@@ -11,6 +11,14 @@
         <router-link to="/interests" class="nav-link" :class="{ active: route.name === 'Interests' }">관심 게임</router-link>
         <router-link
           v-if="auth.isAdmin"
+          to="/admin/reviews"
+          class="nav-link"
+          :class="{ active: route.name === 'AdminEntityReviews' }"
+        >
+          검토 큐
+        </router-link>
+        <router-link
+          v-if="auth.isAdmin"
           to="/admin/games"
           class="nav-link"
           :class="{ active: route.name === 'AdminGames' }"
@@ -23,15 +31,7 @@
           class="nav-link"
           :class="{ active: route.name === 'AdminFranchises' }"
         >
-          프랜차이즈
-        </router-link>
-        <router-link
-          v-if="auth.isAdmin"
-          to="/admin/reviews"
-          class="nav-link"
-          :class="{ active: route.name === 'AdminEntityReviews' }"
-        >
-          검토 큐
+          프랜차이즈 관리
         </router-link>
       </nav>
 

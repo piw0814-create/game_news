@@ -135,6 +135,29 @@ public class IgdbClient {
                 .orElseThrow(() -> new IllegalArgumentException("IGDB 프랜차이즈를 찾을 수 없습니다: " + igdbId));
     }
 
+    public List<IgdbFranchise> getFranchisesByIds(List<Long> igdbIds) {
+        ensureConfigured();
+        if (igdbIds == null || igdbIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = igdbIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return List.of();
+
+        java.util.ArrayList<IgdbFranchise> result = new java.util.ArrayList<>();
+        final int chunkSize = 500;
+        for (int from = 0; from < ids.size(); from += chunkSize) {
+            List<Long> chunk = ids.subList(from, Math.min(from + chunkSize, ids.size()));
+            String joined = chunk.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+            String body = "fields id,name,games; where id = (" + joined + "); limit " + chunk.size() + ";";
+            result.addAll(request(
+                    "/franchises",
+                    body,
+                    new ParameterizedTypeReference<List<IgdbFranchise>>() {},
+                    "franchises batch size=" + chunk.size()));
+        }
+        return List.copyOf(result);
+    }
+
     private List<IgdbGame> requestGames(String body, String operation) {
         return request(
                 "/games",

@@ -183,11 +183,14 @@ Insight Service는 `news.created`를 기사 1건씩 처리하고, 시작 시 `PE
 기사에서 Game/Franchise 후보를 찾는 것은 AI가 담당하고, 기준 엔티티 확정은 IGDB를 우선합니다. AI confidence 하나만으로 Game/Franchise를 본 테이블에 생성하지 않습니다.
 
 ```text
-AI confidence >= 0.90 + IGDB/local identity가 유일하게 확정
+AI confidence >= 0.90 + IGDB identity가 안전하게 확정
 → 자동 확정 / metadata upsert / Article 관계 연결
 
+동일 이름 IGDB Game이 여러 개여도 정확한 canonical name의 `Main Game`이 하나뿐이고
+기사 문맥에 Remaster/Port/DLC/Expansion 같은 변형판 지시가 없으면 Main Game을 우선 자동 확정
+
 0.60 <= confidence < 0.90
-또는 동일 이름/IGDB 후보가 복수
+또는 동일 이름 후보 중 Main Game/변형판을 안전하게 구분할 수 없음
 또는 Game/Franchise 범위가 관리자 판단을 필요로 함
 → EntityReview(PENDING)
 
@@ -359,6 +362,7 @@ API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `in
 - `Game.igdbId`가 IGDB 카탈로그 Game의 고유 식별자다.
 - `Game.name`은 표시/검색용이므로 서로 다른 IGDB ID가 같은 이름을 가져도 저장할 수 있다.
 - Franchise catalog sync는 `franchise.games`를 기준으로 Game을 upsert하고 `GameFranchise`를 동기화한다.
-- 동일 이름이 여러 Game을 가리키는 경우 기사 자동 연결은 금지하고 관리자 검토 대상으로 남긴다.
+- 동일 이름의 IGDB Game이 여러 개여도 canonical exact match 중 `Main Game`이 하나뿐이면 일반 기사에는 Main Game을 우선한다.
+- 기사 문맥이 Remaster/Remake/Port/Expansion/DLC/Pack을 명시하면 해당 IGDB `game_type`과 일치하는 후보만 자동 선택하며, 그래도 복수면 관리자 검토로 남긴다.
 - ArticleGame/TopicGame에는 실제 기사에서 판별된 Game만 연결하며 Franchise 카탈로그 전체를 전파하지 않는다.
 

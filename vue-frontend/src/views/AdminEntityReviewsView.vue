@@ -22,7 +22,8 @@
       </div>
 
       <section class="toolbar">
-        <div class="status-tabs">
+        <div class="filter-groups">
+          <div class="status-tabs">
           <button
             v-for="tab in tabs"
             :key="tab.value"
@@ -33,6 +34,19 @@
           >
             {{ tab.label }}
           </button>
+          </div>
+          <div class="kind-tabs" aria-label="엔티티 종류">
+            <button
+              v-for="tab in kindTabs"
+              :key="tab.value"
+              type="button"
+              class="kind-tab"
+              :class="{ active: kindFilter === tab.value }"
+              @click="kindFilter = tab.value"
+            >
+              {{ tab.label }}
+            </button>
+          </div>
         </div>
         <label class="search-box">
           <span class="sr-only">검토 검색</span>
@@ -65,46 +79,72 @@
               :disabled="resolvingId === review.id"
               @click="resolveUnrelated(review)"
             >관련 없음</button>
+            <button
+              v-else
+              type="button"
+              class="text-button"
+              :disabled="resolvingId === review.id"
+              @click="reopenReview(review)"
+            >재검토</button>
           </div>
 
           <div v-if="review.status === 'PENDING'" class="candidate-panel">
             <div class="panel-heading">
               <strong>판정 후보</strong>
-              <span>IGDB 우선 · 애매하면 관리자 결정</span>
+              <span>IGDB 우선 · 후보 순서는 참고용, 애매하면 관리자 결정</span>
             </div>
 
-            <div v-if="review.candidates?.length" class="candidate-grid">
-              <div
-                v-for="(candidate, index) in review.candidates"
-                :key="`${candidate.source}-${candidate.entityKind}-${candidate.localId || candidate.igdbId || index}`"
-                class="candidate-card"
+            <div v-if="review.candidates?.length" class="candidate-groups">
+              <section
+                v-for="group in candidateGroups(review)"
+                :key="`${review.id}-${group.kind}`"
+                class="candidate-group"
               >
-                <div class="candidate-title">
-                  <strong>{{ candidate.displayName || candidate.name }}</strong>
-                  <span>{{ candidate.entityKind === 'GAME' ? 'GAME' : 'FRANCHISE' }}</span>
+                <div class="candidate-group-heading">
+                  <strong>{{ group.label }}</strong>
+                  <span>{{ group.items.length }}개</span>
                 </div>
-                <p v-if="candidate.displayName && candidate.displayName !== candidate.name" class="canonical">{{ candidate.name }}</p>
-                <p class="candidate-meta">
-                  {{ candidate.source }}
-                  <template v-if="candidate.localId"> · Local #{{ candidate.localId }}</template>
-                  <template v-if="candidate.igdbId"> · IGDB #{{ candidate.igdbId }}</template>
-                </p>
-                <p v-if="candidate.publisher || candidate.developer" class="candidate-meta">
-                  {{ [candidate.developer, candidate.publisher].filter(Boolean).join(' · ') }}
-                </p>
-                <p v-if="candidate.gameType || candidate.versionParentIgdbId" class="candidate-meta">
-                  {{ candidate.gameType || 'type 미확인' }}
-                  <template v-if="candidate.versionParentIgdbId"> · parent #{{ candidate.versionParentIgdbId }}</template>
-                </p>
-                <button
-                  type="button"
-                  class="resolve-button"
-                  :disabled="resolvingId === review.id"
-                  @click="resolveCandidate(review, candidate)"
-                >
-                  {{ candidate.entityKind === 'GAME' ? '이 게임으로 확정' : '이 프랜차이즈로 확정' }}
-                </button>
-              </div>
+                <div class="candidate-grid">
+                  <div
+                    v-for="(candidate, index) in group.items"
+                    :key="`${candidate.source}-${candidate.entityKind}-${candidate.localId || candidate.igdbId || index}`"
+                    class="candidate-card"
+                    :class="{
+                      recommended: candidate.entityKind === review.entityKind,
+                      priority: isPriorityCandidate(review, group, index)
+                    }"
+                  >
+                    <div class="candidate-title">
+                      <strong>{{ candidate.displayName || candidate.name }}</strong>
+                      <div class="candidate-badges">
+                        <span v-if="isPriorityCandidate(review, group, index)" class="priority-badge">우선 확인</span>
+                        <span>{{ candidate.entityKind === 'GAME' ? 'GAME' : 'FRANCHISE' }}</span>
+                      </div>
+                    </div>
+                    <p v-if="candidate.displayName && candidate.displayName !== candidate.name" class="canonical">{{ candidate.name }}</p>
+                    <p class="candidate-meta">
+                      {{ candidateSourceLabel(candidate.source) }}
+                      <template v-if="candidate.localId"> · Local #{{ candidate.localId }}</template>
+                      <template v-if="candidate.igdbId"> · IGDB #{{ candidate.igdbId }}</template>
+                    </p>
+                    <p v-if="candidate.publisher || candidate.developer" class="candidate-meta">
+                      {{ [candidate.developer, candidate.publisher].filter(Boolean).join(' · ') }}
+                    </p>
+                    <p v-if="candidate.gameType || candidate.versionParentIgdbId" class="candidate-meta">
+                      {{ candidate.gameType || 'type 미확인' }}
+                      <template v-if="candidate.versionParentIgdbId"> · parent #{{ candidate.versionParentIgdbId }}</template>
+                    </p>
+                    <button
+                      type="button"
+                      class="resolve-button"
+                      :disabled="resolvingId === review.id"
+                      @click="resolveCandidate(review, candidate)"
+                    >
+                      {{ candidate.entityKind === 'GAME' ? '이 게임으로 확정' : '이 프랜차이즈로 확정' }}
+                    </button>
+                  </div>
+                </div>
+              </section>
             </div>
             <p v-else class="no-candidate">IGDB/로컬 후보가 없습니다. 게임·프랜차이즈 관리 화면에서 기준 데이터를 먼저 등록한 뒤 다시 검토하세요.</p>
           </div>
@@ -131,6 +171,7 @@ const resolvingId = ref(null)
 const error = ref('')
 const notice = ref('')
 const status = ref('PENDING')
+const kindFilter = ref('ALL')
 const search = ref('')
 
 const tabs = [
@@ -140,18 +181,81 @@ const tabs = [
   { value: '', label: '전체' }
 ]
 
+const kindTabs = [
+  { value: 'ALL', label: '전체 유형' },
+  { value: 'GAME', label: '게임' },
+  { value: 'FRANCHISE', label: '프랜차이즈' }
+]
+
 const filteredReviews = computed(() => {
   const keyword = search.value.toLocaleLowerCase('ko-KR')
-  if (!keyword) return reviews.value
-  return reviews.value.filter((item) => [item.detectedName, item.articleTitle, item.articleSourceName, item.reason]
-    .filter(Boolean).join(' ').toLocaleLowerCase('ko-KR').includes(keyword))
+  return reviews.value.filter((item) => {
+    if (kindFilter.value !== 'ALL' && item.entityKind !== kindFilter.value) return false
+    if (!keyword) return true
+    return [item.detectedName, item.articleTitle, item.articleSourceName, item.reason]
+      .filter(Boolean).join(' ').toLocaleLowerCase('ko-KR').includes(keyword)
+  })
 })
 
 function extractData(response) { return response?.data?.data ?? response?.data }
 function errorMessage(err, fallback) { return err?.response?.data?.message || err?.message || fallback }
 function kindLabel(kind) { return kind === 'GAME' ? '게임 후보' : '프랜차이즈 후보' }
+function candidateSourceLabel(source) {
+  if (source === 'LOCAL_IGDB') return 'LOCAL · IGDB'
+  return source || '-'
+}
 function statusLabel(value) { return value === 'RESOLVED' ? '확정 완료' : value === 'REJECTED' ? '관련 없음' : '검토 필요' }
 function confidencePercent(value) { return value == null ? '-' : Math.round(Number(value) * 100) }
+
+function candidateGroups(review) {
+  const candidates = Array.isArray(review.candidates) ? review.candidates : []
+  const preferredKind = review.entityKind
+  const alternateKind = preferredKind === 'GAME' ? 'FRANCHISE' : 'GAME'
+  const groups = [
+    {
+      kind: preferredKind,
+      label: preferredKind === 'GAME' ? '추천 게임 후보' : '추천 프랜차이즈 후보',
+      items: candidates
+        .filter((item) => item.entityKind === preferredKind)
+        .slice()
+        .sort((a, b) => candidateRank(review, a) - candidateRank(review, b))
+    },
+    {
+      kind: alternateKind,
+      label: alternateKind === 'GAME' ? '다른 해석 · 게임' : '다른 해석 · 프랜차이즈',
+      items: candidates
+        .filter((item) => item.entityKind === alternateKind)
+        .slice()
+        .sort((a, b) => candidateRank(review, a) - candidateRank(review, b))
+    }
+  ]
+  return groups.filter((group) => group.items.length)
+}
+
+function candidateRank(review, candidate) {
+  const detected = String(review.detectedName || '').trim().toLocaleLowerCase('ko-KR')
+  const name = String(candidate.name || '').trim().toLocaleLowerCase('ko-KR')
+  let score = 100
+
+  if (name && name === detected) score -= 40
+  if (candidate.source === 'LOCAL_IGDB') score -= 20
+  else if (candidate.source === 'LOCAL') score -= 8
+
+  if (candidate.entityKind === 'GAME') {
+    const type = String(candidate.gameType || '').toLocaleLowerCase('en-US')
+    if (type === 'main game') score -= 18
+    else if (type.includes('remaster') || type.includes('remake')) score -= 4
+    else if (type.includes('port')) score += 2
+    else if (type.includes('expansion') || type.includes('dlc') || type.includes('pack') || type.includes('addon')) score += 8
+    if (candidate.versionParentIgdbId) score += 6
+  }
+
+  return score
+}
+
+function isPriorityCandidate(review, group, index) {
+  return group.kind === review.entityKind && index === 0 && group.items.length > 1
+}
 
 async function loadReviews() {
   loading.value = true
@@ -205,6 +309,22 @@ async function resolveUnrelated(review) {
   }
 }
 
+async function reopenReview(review) {
+  if (!window.confirm(`'${review.detectedName}' 검토 결정을 되돌리고 다시 검토하시겠습니까? 기존 기사/Topic 관계도 함께 되돌립니다.`)) return
+  resolvingId.value = review.id
+  error.value = ''
+  try {
+    await entityReviewApi.reopen(review.id)
+    notice.value = '검토 항목을 다시 PENDING으로 돌렸습니다. 후보도 최신 IGDB 기준으로 다시 조회했습니다.'
+    status.value = 'PENDING'
+    await loadReviews()
+  } catch (err) {
+    error.value = errorMessage(err, '재검토 상태로 되돌리지 못했습니다.')
+  } finally {
+    resolvingId.value = null
+  }
+}
+
 onMounted(loadReviews)
 </script>
 
@@ -221,9 +341,12 @@ onMounted(loadReviews)
 .message-banner.notice { color: #4e5c51; }
 .message-banner button { background: none; color: #777e88; font-size: 11px; }
 .toolbar { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; padding: 28px 0 12px; }
-.status-tabs { display: flex; gap: 4px; }
+.filter-groups { display: flex; flex-direction: column; gap: 8px; }
+.status-tabs, .kind-tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .status-tab { padding: 7px 10px; border: 1px solid transparent; background: #fff; color: #838a94; font-size: 11px; font-weight: 700; }
 .status-tab.active { border-color: #22262c; color: #22262c; }
+.kind-tab { padding: 5px 8px; border: 0; background: #f5f6f7; color: #8a919a; font-size: 10px; font-weight: 700; }
+.kind-tab.active { background: #2a2e34; color: #fff; }
 .search-box { width: min(340px, 100%); }
 .search-box input { width: 100%; height: 34px; border: 0; border-bottom: 1px solid #cfd3d8; outline: 0; font: inherit; font-size: 12px; }
 .review-list { border-top: 2px solid #17191d; }
@@ -242,11 +365,21 @@ onMounted(loadReviews)
 .panel-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; }
 .panel-heading strong { font-size: 12px; }
 .panel-heading span { color: #9299a2; font-size: 10px; }
+.candidate-groups { display: flex; flex-direction: column; gap: 18px; }
+.candidate-group { padding-top: 2px; }
+.candidate-group + .candidate-group { padding-top: 16px; border-top: 1px dashed #dfe2e6; }
+.candidate-group-heading { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 9px; }
+.candidate-group-heading strong { font-size: 11px; }
+.candidate-group-heading span { color: #9aa0a8; font-size: 9px; }
 .candidate-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .candidate-card { padding: 14px; border: 1px solid #dfe2e6; }
+.candidate-card.recommended { border-color: #aeb4bc; }
+.candidate-card.priority { border-color: #676f79; }
 .candidate-title { display: flex; justify-content: space-between; gap: 12px; }
 .candidate-title strong { font-size: 12px; }
 .candidate-title span { color: #9299a2; font-size: 9px; font-weight: 800; }
+.candidate-badges { display: flex; align-items: center; gap: 6px; }
+.candidate-title .priority-badge { padding: 2px 5px; background: #eef0f2; color: #4f5761; }
 .canonical, .candidate-meta { margin: 5px 0 0; color: #7f8791; font-size: 10px; }
 .resolve-button { margin-top: 12px; padding: 7px 10px; border: 1px solid #25292f; background: #25292f; color: #fff; font-size: 10px; font-weight: 700; }
 .resolve-button:disabled { opacity: .5; }
