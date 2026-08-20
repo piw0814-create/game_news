@@ -95,10 +95,4 @@ public class InterestService {
                 sourceGameId, targetGameId, moved, duplicatesRemoved);
     }
 
-    @Transactional
-    public void deleteGameReferences(Long gameId) {
-        List<UserGame> interests = userGameRepository.findAllByGameIdOrderByIdAsc(gameId);
-        userGameRepository.deleteAll(interests);
-        log.info("[InterestService] Game 관심관계 제거 - gameId={}, deleted={}", gameId, interests.size());
-    }
 }

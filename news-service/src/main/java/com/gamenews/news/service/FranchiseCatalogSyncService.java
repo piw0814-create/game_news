@@ -8,7 +8,6 @@ import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.GameFranchise;
 import com.gamenews.news.entity.GameFranchiseSource;
 import com.gamenews.news.entity.GameRegistrationSource;
-import com.gamenews.news.entity.GameReviewStatus;
 import com.gamenews.news.event.FranchiseResolvedEvent;
 import com.gamenews.news.repository.FranchiseRepository;
 import com.gamenews.news.repository.GameFranchiseRepository;
@@ -132,7 +131,6 @@ public class FranchiseCatalogSyncService {
         Game created = Game.builder()
                 .name(rawGame.getName().trim())
                 .registrationSource(GameRegistrationSource.IGDB)
-                .reviewStatus(GameReviewStatus.CONFIRMED)
                 .build();
         return new UpsertResult(gameRepository.save(created), true);
     }

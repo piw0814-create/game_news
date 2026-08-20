@@ -5,9 +5,6 @@ import com.gamenews.news.entity.GameAlias;
 import com.gamenews.news.entity.GameEnrichmentStatus;
 import com.gamenews.news.entity.GameMetadataSource;
 import com.gamenews.news.entity.GameRegistrationSource;
-import com.gamenews.news.entity.GameReviewStatus;
-import jakarta.validation.constraints.DecimalMax;
-import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
@@ -16,7 +13,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -99,37 +95,6 @@ public class GameDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
-    public static class ResolveOrCreateAiRequest {
-
-        @NotBlank(message = "게임 이름은 필수입니다")
-        @Size(max = 255, message = "게임 이름은 255자 이하여야 합니다")
-        private String name;
-
-        @NotNull(message = "검토 상태는 필수입니다")
-        private GameReviewStatus reviewStatus;
-
-        @NotNull(message = "등록 신뢰도는 필수입니다")
-        @DecimalMin(value = "0.0", message = "등록 신뢰도는 0 이상이어야 합니다")
-        @DecimalMax(value = "1.0", message = "등록 신뢰도는 1 이하여야 합니다")
-        private BigDecimal registrationConfidence;
-
-        @NotNull(message = "출처 기사 ID는 필수입니다")
-        private Long sourceArticleId;
-    }
-
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class ResolveOrCreateResponse {
-        private boolean created;
-        private GameResponse game;
-    }
-
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
     public static class GameResponse {
         private Long id;
         private String name;
@@ -147,9 +112,6 @@ public class GameDto {
         private GameEnrichmentStatus enrichmentStatus;
         private OffsetDateTime lastEnrichedAt;
         private GameRegistrationSource registrationSource;
-        private GameReviewStatus reviewStatus;
-        private BigDecimal registrationConfidence;
-        private Long sourceArticleId;
         private OffsetDateTime createdAt;
         private OffsetDateTime updatedAt;
 
@@ -173,9 +135,6 @@ public class GameDto {
                             : game.getEnrichmentStatus())
                     .lastEnrichedAt(toUtc(game.getLastEnrichedAt()))
                     .registrationSource(game.getRegistrationSource())
-                    .reviewStatus(game.getReviewStatus())
-                    .registrationConfidence(game.getRegistrationConfidence())
-                    .sourceArticleId(game.getSourceArticleId())
                     .createdAt(toUtc(game.getCreatedAt()))
                     .updatedAt(toUtc(game.getUpdatedAt()))
                     .build();

@@ -115,7 +115,12 @@ public class NewsService {
         List<String> normalizedKeywords = normalizeKeywords(request.getKeywords());
         String keywordsJson = toJson(normalizedKeywords);
 
-        article.completeAnalysis(summary, request.getCategory(), keywordsJson);
+        article.completeAnalysis(
+                summary,
+                request.getCategory(),
+                keywordsJson,
+                request.getGameNewsRelevant(),
+                request.getEntityType());
         return NewsArticleDto.NewsArticleResponse.from(article);
     }
 

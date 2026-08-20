@@ -58,6 +58,8 @@ class ArticleAnalysisService:
                     summary=analysis.summary,
                     category=analysis.category,
                     keywords=analysis.keywords,
+                    game_news_relevant=analysis.gameNewsRelevant,
+                    entity_type=analysis.entityType,
                 )
                 logger.info(
                     "[ArticleAnalysis] 게임/IP 생태계 비관련 - Topic 생성 생략 "
@@ -89,6 +91,8 @@ class ArticleAnalysisService:
                 summary=analysis.summary,
                 category=analysis.category,
                 keywords=analysis.keywords,
+                game_news_relevant=analysis.gameNewsRelevant,
+                entity_type=analysis.entityType,
             )
 
             logger.info(

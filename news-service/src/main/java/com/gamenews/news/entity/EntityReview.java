@@ -115,6 +115,19 @@ public class EntityReview {
         this.resolvedAt = LocalDateTime.now();
     }
 
+
+    public void reassignResolvedGame(Long gameId) {
+        if (this.status == EntityReviewStatus.RESOLVED && this.resolvedGameId != null) {
+            this.resolvedGameId = gameId;
+        }
+    }
+
+    public void reassignResolvedFranchise(Long franchiseId) {
+        if (this.status == EntityReviewStatus.RESOLVED && this.resolvedFranchiseId != null) {
+            this.resolvedFranchiseId = franchiseId;
+        }
+    }
+
     public void reject() {
         this.status = EntityReviewStatus.REJECTED;
         this.resolvedGameId = null;

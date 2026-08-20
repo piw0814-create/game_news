@@ -14,6 +14,10 @@ public interface EntityReviewRepository extends JpaRepository<EntityReview, Long
 
     List<EntityReview> findAllByOrderByCreatedAtDesc();
 
+    List<EntityReview> findAllByResolvedGameId(Long resolvedGameId);
+
+    List<EntityReview> findAllByResolvedFranchiseId(Long resolvedFranchiseId);
+
     Optional<EntityReview> findFirstByArticle_IdAndEntityKindAndDetectedNameIgnoreCaseAndStatusOrderByIdDesc(
             Long articleId,
             EntityReviewKind entityKind,

@@ -82,16 +82,13 @@
 
               <div class="audit-line">
                 <span>{{ sourceLabel(game.registrationSource) }}</span>
-                <span v-if="game.registrationConfidence != null">
-                  신뢰도 {{ confidencePercent(game.registrationConfidence) }}%
-                </span>
-                <span v-if="game.sourceArticleId">기사 #{{ game.sourceArticleId }}</span>
+                <span v-if="game.igdbId">IGDB #{{ game.igdbId }}</span>
               </div>
             </div>
 
             <div class="row-actions">
               <button type="button" class="text-button" @click="toggleEdit(game)">수정</button>
-              <button type="button" class="text-button" @click="toggleReview(game)">상세 · 관리</button>
+              <button type="button" class="text-button" @click="toggleManage(game)">상세 · 관리</button>
               <button type="button" class="text-button" @click="toggleMerge(game)">병합</button>
             </div>
 
@@ -182,196 +179,77 @@
               </p>
             </div>
 
-            <div v-if="reviewingGameId === game.id" class="inline-panel review-panel">
+            <div v-if="managingGameId === game.id" class="inline-panel review-panel">
               <div class="panel-heading">
                 <strong>게임 상세 · 관리</strong>
                 <button type="button" @click="closePanels">닫기</button>
               </div>
 
-              <div v-if="reviewLoadingGameId === game.id" class="review-loading">검토 정보를 불러오는 중...</div>
+              <section class="review-block">
+                <div class="review-block-heading">
+                  <strong>카탈로그 정보</strong>
+                </div>
+                <dl class="metadata-grid catalog-metadata">
+                  <div><dt>등록 출처</dt><dd>{{ sourceLabel(game.registrationSource) }}</dd></div>
+                  <div><dt>IGDB ID</dt><dd>{{ game.igdbId || '-' }}</dd></div>
+                  <div><dt>IGDB Type</dt><dd>{{ game.igdbGameType || '-' }}</dd></div>
+                  <div><dt>Metadata</dt><dd>{{ game.metadataSource || '-' }}</dd></div>
+                </dl>
+              </section>
 
-              <template v-else-if="contextFor(game.id)">
-                <section v-if="canReclassifyAiRecognition(game)" class="review-decision">
-                  <div class="review-decision-heading">
-                    <strong>AI 자동확정 판정을 다시 분류할까요?</strong>
-                    <span>등록 근거가 특정 게임이 아니었다면 프랜차이즈 또는 관련 없음으로 바로잡을 수 있습니다.</span>
+              <section class="review-block igdb-block">
+                <div class="review-block-heading">
+                  <div>
+                    <strong>IGDB 메타데이터</strong>
+                    <small v-if="game.enrichmentStatus">{{ enrichmentLabel(game.enrichmentStatus) }}</small>
                   </div>
-
-                  <div class="decision-grid">
-                    <div class="decision-card">
-                      <strong>특정 게임</strong>
-                      <p>현재 특정 게임으로 확정되어 있습니다. 이름·메타데이터가 잘못됐다면 수정, IGDB 재적용 또는 병합을 사용하세요.</p>
-                      <span class="decision-current">현재 특정 게임으로 확정됨</span>
-                    </div>
-
-                    <div class="decision-card">
-                      <strong>프랜차이즈</strong>
-                      <p>특정 작품이 아니라 IP/시리즈 전체를 가리키면 ArticleGame을 Franchise 관계로 전환합니다.</p>
-                      <input
-                        v-model.trim="reviewFranchiseKeyword"
-                        class="decision-input"
-                        type="search"
-                        placeholder="프랜차이즈 검색"
-                      />
-                      <div v-if="franchiseCandidates().length" class="decision-candidates">
-                        <button
-                          v-for="franchise in franchiseCandidates()"
-                          :key="franchise.id"
-                          type="button"
-                          :disabled="actionGameId === game.id"
-                          @click="resolveAsFranchise(game, franchise)"
-                        >
-                          <span>{{ franchise.displayName || franchise.name }}</span>
-                          <small v-if="franchise.displayName">{{ franchise.name }}</small>
-                        </button>
-                      </div>
-                      <p v-else class="decision-empty">
-                        기존 프랜차이즈 후보가 없습니다. 신규 프랜차이즈는 기사 분석 또는 검토 큐에서 IGDB 기준으로 확정한 뒤 전환할 수 있습니다.
-                      </p>
-                    </div>
-
-                    <div class="decision-card danger-card">
-                      <strong>관련 없음</strong>
-                      <p>게임/프랜차이즈 인식 자체가 잘못된 경우입니다. AI 등록 Game과 연결된 기사·토픽·관심 관계를 정리합니다.</p>
-                      <button
-                        type="button"
-                        class="secondary-button danger-action"
-                        :disabled="actionGameId === game.id"
-                        @click="rejectGame(game)"
-                      >
-                        관련 없음 처리
-                      </button>
-                    </div>
-                  </div>
-                </section>
-
-                <section class="review-block">
-                  <div class="review-block-heading">
-                    <strong>등록 근거</strong>
-                  </div>
-                  <a
-                    v-if="contextFor(game.id).sourceArticle"
-                    :href="contextFor(game.id).sourceArticle.url"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="article-link"
+                  <button
+                    type="button"
+                    class="secondary-button small"
+                    :disabled="enrichmentLoadingGameId === game.id"
+                    @click="previewEnrichment(game)"
                   >
-                    <span>
-                      <strong>{{ contextFor(game.id).sourceArticle.title }}</strong>
-                      <small>{{ contextFor(game.id).sourceArticle.sourceName }}</small>
-                    </span>
-                    <em>원문 ↗</em>
-                  </a>
-                  <p v-else class="review-empty">등록 원인 기사 정보가 없습니다.</p>
-                </section>
+                    {{ enrichmentLoadingGameId === game.id ? '조회 중...' : '메타데이터 찾기' }}
+                  </button>
+                </div>
 
-                <section class="review-block">
-                  <div class="review-block-heading">
-                    <strong>연결 기사</strong>
-                    <span>{{ contextFor(game.id).linkedArticles?.length || 0 }}건</span>
-                  </div>
-                  <div v-if="contextFor(game.id).linkedArticles?.length" class="article-list">
-                    <a
-                      v-for="article in contextFor(game.id).linkedArticles"
-                      :key="article.id"
-                      :href="article.url"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      class="article-link compact"
-                    >
-                      <span>
-                        <strong>{{ article.title }}</strong>
-                        <small>{{ article.sourceName }} · 신뢰도 {{ confidencePercent(article.confidenceScore) }}%<template v-if="article.primary"> · 대표</template></small>
-                        <small v-if="article.relevanceReason" class="article-reason">근거 · {{ article.relevanceReason }}</small>
-                      </span>
-                      <em>↗</em>
-                    </a>
-                  </div>
-                  <p v-else class="review-empty">연결된 기사가 없습니다.</p>
-                </section>
-
-                <section class="review-block">
-                  <div class="review-block-heading">
-                    <strong>기존 Game 유사 후보</strong>
-                    <span>Top {{ contextFor(game.id).similarGames?.length || 0 }}</span>
-                  </div>
-                  <div v-if="contextFor(game.id).similarGames?.length" class="similar-list">
-                    <div v-for="candidate in contextFor(game.id).similarGames" :key="candidate.id" class="similar-item">
-                      <div>
-                        <strong>{{ gameDisplayName(candidate) }}</strong>
-                        <small v-if="candidate.name !== gameDisplayName(candidate)">{{ candidate.name }}</small>
-                        <p>{{ (candidate.reasons || []).join(' · ') || '이름 기반 유사 후보' }}</p>
-                      </div>
-                      <div class="similar-actions">
-                        <em>{{ confidencePercent(candidate.similarityScore) }}%</em>
-                        <button
-                          type="button"
-                          class="secondary-button small"
-                          :disabled="actionGameId === game.id"
-                          @click="mergeGame(game, candidate)"
-                        >
-                          병합
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <p v-else class="review-empty">유사도가 높은 기존 Game이 없습니다.</p>
-                </section>
-
-                <section class="review-block igdb-block">
-                  <div class="review-block-heading">
-                    <div>
-                      <strong>IGDB 메타데이터</strong>
-                      <small v-if="game.enrichmentStatus">{{ enrichmentLabel(game.enrichmentStatus) }}</small>
-                    </div>
-                    <button
-                      type="button"
-                      class="secondary-button small"
-                      :disabled="enrichmentLoadingGameId === game.id"
-                      @click="previewEnrichment(game)"
-                    >
-                      {{ enrichmentLoadingGameId === game.id ? '조회 중...' : '메타데이터 찾기' }}
-                    </button>
-                  </div>
-
-                  <template v-if="previewFor(game.id)">
-                    <p v-if="!previewFor(game.id).configured" class="review-empty warning">
-                      IGDB_CLIENT_ID / IGDB_CLIENT_SECRET 설정이 필요합니다.
-                    </p>
-                    <div v-else-if="previewFor(game.id).candidates?.length" class="igdb-candidates">
-                      <article v-for="candidate in previewFor(game.id).candidates" :key="candidate.igdbId" class="igdb-candidate">
-                        <img v-if="candidate.imageUrl" :src="candidate.imageUrl" :alt="candidate.name" />
-                        <div class="igdb-candidate-body">
-                          <div class="candidate-title">
-                            <strong>{{ candidate.name }}</strong>
-                            <em>매칭 {{ confidencePercent(candidate.matchScore) }}%</em>
-                          </div>
-                          <p v-if="candidate.matchReasons?.length" class="candidate-reasons">{{ candidate.matchReasons.join(' · ') }}</p>
-                          <dl class="metadata-grid">
-                            <div><dt>Developer</dt><dd>{{ candidate.developer || '-' }}</dd></div>
-                            <div><dt>Publisher</dt><dd>{{ candidate.publisher || '-' }}</dd></div>
-                            <div><dt>Genre</dt><dd>{{ candidate.genres?.join(', ') || '-' }}</dd></div>
-                            <div><dt>Platform</dt><dd>{{ candidate.platforms?.join(', ') || '-' }}</dd></div>
-                          </dl>
-                          <p v-if="candidate.aliases?.length" class="candidate-extra">별칭 · {{ candidate.aliases.slice(0, 6).join(', ') }}</p>
-                          <p v-if="candidate.localizedNames?.length" class="candidate-extra">지역명 · {{ localizedPreview(candidate.localizedNames) }}</p>
-                          <div class="candidate-actions">
-                            <button
-                              type="button"
-                              class="primary-button"
-                              :disabled="actionGameId === game.id"
-                              @click="applyEnrichment(game, candidate)"
-                            >
-                              이 후보 적용
-                            </button>
-                          </div>
+                <template v-if="previewFor(game.id)">
+                  <p v-if="!previewFor(game.id).configured" class="review-empty warning">
+                    IGDB_CLIENT_ID / IGDB_CLIENT_SECRET 설정이 필요합니다.
+                  </p>
+                  <div v-else-if="previewFor(game.id).candidates?.length" class="igdb-candidates">
+                    <article v-for="candidate in previewFor(game.id).candidates" :key="candidate.igdbId" class="igdb-candidate">
+                      <img v-if="candidate.imageUrl" :src="candidate.imageUrl" :alt="candidate.name" />
+                      <div class="igdb-candidate-body">
+                        <div class="candidate-title">
+                          <strong>{{ candidate.name }}</strong>
+                          <em>매칭 {{ confidencePercent(candidate.matchScore) }}%</em>
                         </div>
-                      </article>
-                    </div>
-                    <p v-else class="review-empty">IGDB에서 후보를 찾지 못했습니다.</p>
-                  </template>
-                </section>
-              </template>
+                        <p v-if="candidate.matchReasons?.length" class="candidate-reasons">{{ candidate.matchReasons.join(' · ') }}</p>
+                        <dl class="metadata-grid">
+                          <div><dt>Developer</dt><dd>{{ candidate.developer || '-' }}</dd></div>
+                          <div><dt>Publisher</dt><dd>{{ candidate.publisher || '-' }}</dd></div>
+                          <div><dt>Genre</dt><dd>{{ candidate.genres?.join(', ') || '-' }}</dd></div>
+                          <div><dt>Platform</dt><dd>{{ candidate.platforms?.join(', ') || '-' }}</dd></div>
+                        </dl>
+                        <p v-if="candidate.aliases?.length" class="candidate-extra">별칭 · {{ candidate.aliases.slice(0, 6).join(', ') }}</p>
+                        <p v-if="candidate.localizedNames?.length" class="candidate-extra">지역명 · {{ localizedPreview(candidate.localizedNames) }}</p>
+                        <div class="candidate-actions">
+                          <button
+                            type="button"
+                            class="primary-button"
+                            :disabled="actionGameId === game.id"
+                            @click="applyEnrichment(game, candidate)"
+                          >
+                            이 후보 적용
+                          </button>
+                        </div>
+                      </div>
+                    </article>
+                  </div>
+                  <p v-else class="review-empty">IGDB에서 후보를 찾지 못했습니다.</p>
+                </template>
+              </section>
             </div>
             </article>
           </div>
@@ -408,10 +286,8 @@
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import AppHeader from '@/components/AppHeader.vue'
 import { gameApi } from '@/api/game.js'
-import { franchiseApi } from '@/api/franchise.js'
 
 const games = ref([])
-const franchises = ref([])
 const loading = ref(false)
 const error = ref('')
 const notice = ref('')
@@ -419,14 +295,11 @@ const searchKeyword = ref('')
 const activeFilter = ref('ALL')
 const editingGameId = ref(null)
 const mergingGameId = ref(null)
-const reviewingGameId = ref(null)
-const reviewLoadingGameId = ref(null)
+const managingGameId = ref(null)
 const enrichmentLoadingGameId = ref(null)
-const reviewContexts = reactive({})
 const enrichmentPreviews = reactive({})
 const actionGameId = ref(null)
 const mergeKeyword = ref('')
-const reviewFranchiseKeyword = ref('')
 const currentPage = ref(1)
 
 const PAGE_SIZE = 10
@@ -529,9 +402,6 @@ function sourceLabel(source) {
   return '수동 등록'
 }
 
-function canReclassifyAiRecognition(game) {
-  return Boolean(game && game.reviewStatus === 'CONFIRMED' && game.registrationSource === 'AI')
-}
 
 function confidencePercent(value) {
   return Math.round(Number(value) * 100)
@@ -568,9 +438,8 @@ function clearMessages() {
 function closePanels() {
   editingGameId.value = null
   mergingGameId.value = null
-  reviewingGameId.value = null
+  managingGameId.value = null
   mergeKeyword.value = ''
-  reviewFranchiseKeyword.value = ''
 }
 
 function toggleEdit(game) {
@@ -583,7 +452,7 @@ function toggleEdit(game) {
 
   editingGameId.value = game.id
   mergingGameId.value = null
-  reviewingGameId.value = null
+  managingGameId.value = null
   mergeKeyword.value = ''
   editForm.name = game.name || ''
   editForm.displayName = game.displayName || ''
@@ -605,14 +474,11 @@ function toggleMerge(game) {
 
   mergingGameId.value = game.id
   editingGameId.value = null
-  reviewingGameId.value = null
+  managingGameId.value = null
   mergeKeyword.value = ''
 }
 
 
-function contextFor(gameId) {
-  return reviewContexts[gameId] || null
-}
 
 function previewFor(gameId) {
   return enrichmentPreviews[gameId] || null
@@ -634,71 +500,17 @@ function localizedPreview(values = []) {
     .join(', ')
 }
 
-async function toggleReview(game) {
+function toggleManage(game) {
   clearMessages()
-  if (reviewingGameId.value === game.id) {
+  if (managingGameId.value === game.id) {
     closePanels()
     return
   }
 
+  managingGameId.value = game.id
   editingGameId.value = null
   mergingGameId.value = null
-  reviewingGameId.value = game.id
-  reviewLoadingGameId.value = game.id
-  reviewFranchiseKeyword.value = game.name || ''
-
-  try {
-    const [response] = await Promise.all([
-      gameApi.getAdminReviewContext(game.id),
-      loadFranchises()
-    ])
-    reviewContexts[game.id] = extractData(response)
-  } catch (err) {
-    error.value = errorMessage(err, '검토 정보를 불러오지 못했습니다.')
-  } finally {
-    reviewLoadingGameId.value = null
-  }
-}
-
-async function loadFranchises() {
-  if (franchises.value.length) return
-  const response = await franchiseApi.getAdminAll()
-  const data = extractData(response)
-  franchises.value = Array.isArray(data) ? data : []
-}
-
-function franchiseCandidates() {
-  const keyword = reviewFranchiseKeyword.value.toLocaleLowerCase('ko-KR')
-  if (!keyword) return franchises.value.slice(0, 6)
-  return franchises.value.filter((franchise) => {
-    const searchable = [franchise.name, franchise.displayName, ...(franchise.aliases || [])]
-      .filter(Boolean)
-      .join(' ')
-      .toLocaleLowerCase('ko-KR')
-    return searchable.includes(keyword)
-  }).slice(0, 6)
-}
-
-async function resolveAsFranchise(game, franchise) {
-  const linkedCount = contextFor(game.id)?.linkedArticles?.length || 0
-  const confirmed = window.confirm(
-    `“${gameDisplayName(game)}”을(를) 특정 게임이 아닌 “${franchise.displayName || franchise.name}” 프랜차이즈 언급으로 전환하시겠습니까?\n연결 기사 ${linkedCount}건을 ArticleFranchise로 옮기고 이 AI 등록 Game과 토픽·관심 게임 관계를 정리합니다.`
-  )
-  if (!confirmed) return
-
-  clearMessages()
-  actionGameId.value = game.id
-  try {
-    const response = await gameApi.resolveAdminAsFranchise(game.id, franchise.id)
-    const result = extractData(response)
-    games.value = games.value.filter((item) => item.id !== game.id)
-    notice.value = `${gameDisplayName(game)}을(를) ${result.franchiseName} 프랜차이즈로 전환했습니다. 연결 기사 ${result.convertedArticleCount}건을 이동했습니다.`
-    closePanels()
-  } catch (err) {
-    error.value = errorMessage(err, '프랜차이즈로 전환하지 못했습니다.')
-  } finally {
-    actionGameId.value = null
-  }
+  mergeKeyword.value = ''
 }
 
 async function previewEnrichment(game) {
@@ -725,8 +537,6 @@ async function applyEnrichment(game, candidate) {
     const updated = extractData(response)
     replaceGame(updated)
     notice.value = `${gameDisplayName(updated)} 메타데이터를 보강했습니다.`
-    const contextResponse = await gameApi.getAdminReviewContext(game.id)
-    reviewContexts[game.id] = extractData(contextResponse)
   } catch (err) {
     error.value = errorMessage(err, 'IGDB 메타데이터를 적용하지 못했습니다.')
   } finally {
@@ -805,27 +615,6 @@ async function mergeGame(source, target) {
   }
 }
 
-async function rejectGame(game) {
-  const linkedCount = contextFor(game.id)?.linkedArticles?.length || 0
-  const confirmed = window.confirm(
-    `“${gameDisplayName(game)}” AI 인식을 관련 없음으로 처리하시겠습니까?\n연결 기사 ${linkedCount}건과 토픽·관심 게임 관계를 정리하고 이 AI 등록 Game을 삭제합니다.`
-  )
-  if (!confirmed) return
-
-  clearMessages()
-  actionGameId.value = game.id
-
-  try {
-    await gameApi.rejectAdmin(game.id)
-    games.value = games.value.filter((item) => item.id !== game.id)
-    notice.value = `${gameDisplayName(game)}을(를) 관련 없음으로 처리했습니다.`
-    closePanels()
-  } catch (err) {
-    error.value = errorMessage(err, '관련 없음 처리를 완료하지 못했습니다.')
-  } finally {
-    actionGameId.value = null
-  }
-}
 
 onMounted(loadGames)
 </script>
@@ -1350,7 +1139,6 @@ onMounted(loadGames)
   gap: 18px;
 }
 
-.review-loading,
 .review-empty {
   margin: 0;
   color: #8a919a;
@@ -1395,105 +1183,9 @@ onMounted(loadGames)
   font-size: 10px;
 }
 
-.article-list,
-.similar-list,
 .igdb-candidates {
   display: grid;
   gap: 8px;
-}
-
-.article-link {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 11px 12px;
-  border: 1px solid #e1e4e8;
-  color: inherit;
-  text-decoration: none;
-}
-
-.article-link.compact {
-  padding: 9px 10px;
-}
-
-.article-link:hover {
-  border-color: #aeb4bc;
-}
-
-.article-link span {
-  min-width: 0;
-  display: grid;
-  gap: 3px;
-}
-
-.article-link strong {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-}
-
-.article-link small {
-  color: #868d96;
-  font-size: 10px;
-}
-
-.article-link .article-reason {
-  color: #6f7680;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.article-link em {
-  flex: 0 0 auto;
-  color: #747b84;
-  font-size: 10px;
-  font-style: normal;
-}
-
-.similar-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 10px 12px;
-  border: 1px solid #e1e4e8;
-}
-
-.similar-item > div:first-child {
-  min-width: 0;
-}
-
-.similar-item strong {
-  display: block;
-  font-size: 11px;
-}
-
-.similar-item small {
-  display: block;
-  margin-top: 2px;
-  color: #858c95;
-  font-size: 10px;
-}
-
-.similar-item p {
-  margin: 4px 0 0;
-  color: #959ba3;
-  font-size: 10px;
-}
-
-.similar-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.similar-actions em {
-  color: #424951;
-  font-size: 11px;
-  font-style: normal;
-  font-weight: 800;
 }
 
 .secondary-button.small {
@@ -1577,63 +1269,6 @@ onMounted(loadGames)
   margin-top: 12px;
 }
 
-.review-decision {
-  padding: 16px;
-  border: 1px solid #d9dde2;
-  background: #fbfbfc;
-}
-
-.review-decision-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 12px;
-}
-
-.review-decision-heading strong { font-size: 12px; }
-.review-decision-heading span { color: #8a919a; font-size: 10px; }
-
-.decision-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-}
-
-.decision-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 9px;
-  min-width: 0;
-  padding: 12px;
-  border: 1px solid #e2e5e9;
-  background: #fff;
-}
-
-.decision-card > strong { font-size: 11px; }
-.decision-card > p { margin: 0; color: #858c95; font-size: 10px; line-height: 1.55; }
-.decision-current {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  margin-top: auto;
-  padding: 0 10px;
-  border: 1px solid #dfe2e6;
-  color: #68717c;
-  background: #f7f8f9;
-  font-size: 10px;
-  font-weight: 700;
-}
-.decision-card .primary-button, .decision-card .secondary-button { margin-top: auto; }
-.decision-input { width: 100%; height: 32px; border: 0; border-bottom: 1px solid #cfd3d8; outline: 0; font-size: 11px; }
-.decision-candidates { display: grid; width: 100%; border-top: 1px solid #eceef1; }
-.decision-candidates button { display: grid; gap: 1px; padding: 7px 2px; border-bottom: 1px solid #eceef1; background: #fff; text-align: left; }
-.decision-candidates button span { color: #363b42; font-size: 10px; font-weight: 700; }
-.decision-candidates button small { color: #9399a1; font-size: 9px; }
-.danger-card { border-color: #eadede; }
-.danger-action { color: #945656; border-color: #dfcaca; }
-
 @media (max-width: 760px) {
   .admin-main {
     width: min(100% - 32px, 1040px);
@@ -1672,9 +1307,6 @@ onMounted(loadGames)
     grid-template-columns: 1fr;
   }
 
-  .decision-grid {
-    grid-template-columns: 1fr;
-  }
 
   .field.full {
     grid-column: auto;

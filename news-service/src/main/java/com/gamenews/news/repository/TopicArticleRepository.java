@@ -8,9 +8,7 @@ import java.util.Optional;
 
 public interface TopicArticleRepository extends JpaRepository<TopicArticle, Long> {
 
-    boolean existsByTopic_IdAndArticle_Id(Long topicId, Long articleId);
-
     List<TopicArticle> findAllByTopic_IdOrderByCreatedAtAsc(Long topicId);
 
-    Optional<TopicArticle> findFirstByArticle_IdOrderByCreatedAtAsc(Long articleId);
+    Optional<TopicArticle> findByArticle_Id(Long articleId);
 }

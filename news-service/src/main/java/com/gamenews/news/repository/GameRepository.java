@@ -1,7 +1,6 @@
 package com.gamenews.news.repository;
 
 import com.gamenews.news.entity.Game;
-import com.gamenews.news.entity.GameReviewStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
 
 import java.util.List;
@@ -17,5 +16,4 @@ public interface GameRepository extends JpaRepository<Game, Long> {
 
     List<Game> findAllByOrderByCreatedAtDesc();
 
-    List<Game> findAllByReviewStatusOrderByCreatedAtDesc(GameReviewStatus reviewStatus);
 }

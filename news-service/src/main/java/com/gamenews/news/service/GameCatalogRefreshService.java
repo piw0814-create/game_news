@@ -1,7 +1,6 @@
 package com.gamenews.news.service;
 
 import com.gamenews.news.entity.Game;
-import com.gamenews.news.entity.GameRegistrationSource;
 import com.gamenews.news.event.GameResolvedEvent;
 import com.gamenews.news.repository.GameFranchiseRepository;
 import com.gamenews.news.repository.GameRepository;
@@ -40,11 +39,7 @@ public class GameCatalogRefreshService {
             if (game.getIgdbId() == null) {
                 boolean matched = gameEnrichmentService.autoApplyBestMatch(gameId);
                 if (!matched) {
-                    if (game.getRegistrationSource() == GameRegistrationSource.AI) {
-                        game.requireReview();
-                        gameRepository.save(game);
-                    }
-                    log.info("[IGDB Auto] No safe automatic match; admin review required - gameId={}, name={}",
+                    log.info("[IGDB Auto] No safe automatic match; catalog remains IGDB-unlinked - gameId={}, name={}",
                             gameId, game.getName());
                     return;
                 }

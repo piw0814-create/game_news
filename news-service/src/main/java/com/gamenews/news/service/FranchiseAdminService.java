@@ -2,6 +2,7 @@ package com.gamenews.news.service;
 
 import com.gamenews.news.dto.FranchiseAdminDto;
 import com.gamenews.news.entity.ArticleFranchise;
+import com.gamenews.news.entity.EntityReview;
 import com.gamenews.news.entity.Franchise;
 import com.gamenews.news.entity.FranchiseAlias;
 import com.gamenews.news.entity.Game;
@@ -9,6 +10,7 @@ import com.gamenews.news.entity.GameFranchise;
 import com.gamenews.news.entity.GameFranchiseSource;
 import com.gamenews.news.entity.TopicFranchise;
 import com.gamenews.news.repository.ArticleFranchiseRepository;
+import com.gamenews.news.repository.EntityReviewRepository;
 import com.gamenews.news.repository.FranchiseRepository;
 import com.gamenews.news.repository.GameFranchiseRepository;
 import com.gamenews.news.repository.GameRepository;
@@ -35,6 +37,7 @@ public class FranchiseAdminService {
     private final GameRepository gameRepository;
     private final ArticleFranchiseRepository articleFranchiseRepository;
     private final TopicFranchiseRepository topicFranchiseRepository;
+    private final EntityReviewRepository entityReviewRepository;
     private final GameSimilarityService similarityService;
 
     public List<FranchiseAdminDto.SummaryResponse> getFranchises(String search) {
@@ -141,6 +144,7 @@ public class FranchiseAdminService {
         mergeGameLinks(source, target);
         mergeArticleLinks(source, target);
         mergeTopicLinks(source, target);
+        reassignEntityReviews(source.getId(), target.getId());
 
         source.clearAliases();
         franchiseRepository.flush();
@@ -155,6 +159,13 @@ public class FranchiseAdminService {
         }
         franchiseRepository.save(target);
         return toDetail(target);
+    }
+
+
+    private void reassignEntityReviews(Long sourceFranchiseId, Long targetFranchiseId) {
+        for (EntityReview review : entityReviewRepository.findAllByResolvedFranchiseId(sourceFranchiseId)) {
+            review.reassignResolvedFranchise(targetFranchiseId);
+        }
     }
 
     private void mergeGameLinks(Franchise source, Franchise target) {

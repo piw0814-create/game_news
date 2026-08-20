@@ -4,8 +4,6 @@ import com.gamenews.interest.dto.InterestDto;
 import com.gamenews.interest.service.InterestService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.DeleteMapping;
-import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -26,9 +24,4 @@ public class InterestInternalController {
         return ResponseEntity.ok(InterestDto.ApiResponse.success(null));
     }
 
-    @DeleteMapping("/{gameId}")
-    public ResponseEntity<InterestDto.ApiResponse<Void>> deleteGameReferences(@PathVariable Long gameId) {
-        interestService.deleteGameReferences(gameId);
-        return ResponseEntity.ok(InterestDto.ApiResponse.success(null));
-    }
 }

@@ -13,7 +13,6 @@ import com.gamenews.news.entity.EntityReviewStatus;
 import com.gamenews.news.entity.Franchise;
 import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.GameRegistrationSource;
-import com.gamenews.news.entity.GameReviewStatus;
 import com.gamenews.news.entity.NewsArticle;
 import com.gamenews.news.event.EntityReviewResolvedEvent;
 import com.gamenews.news.event.FranchiseResolvedEvent;
@@ -253,7 +252,7 @@ public class EntityReviewService {
 
             if (localCandidates.isEmpty()) {
                 try {
-                    return upsertIgdbGame(preferred, request);
+                    return upsertIgdbGame(preferred);
                 } catch (IllegalArgumentException ex) {
                     log.info("[EntityReview] Game auto-create rejected by catalog constraint - name={}, reason={}",
                             request.getDetectedName(), ex.getMessage());
@@ -338,7 +337,7 @@ public class EntityReviewService {
                 return unmappedLocal.get(0);
             }
 
-            return upsertIgdbGame(raw, context);
+            return upsertIgdbGame(raw);
         }
         throw new IllegalArgumentException("Game 결정에는 localEntityId 또는 igdbId가 필요합니다");
     }
@@ -356,15 +355,12 @@ public class EntityReviewService {
         throw new IllegalArgumentException("Franchise 결정에는 localEntityId 또는 igdbId가 필요합니다");
     }
 
-    private Game upsertIgdbGame(IgdbClient.IgdbGame raw, EntityReviewDto.InternalResolveRequest request) {
+    private Game upsertIgdbGame(IgdbClient.IgdbGame raw) {
         Game game = gameRepository.findByIgdbId(raw.getId()).orElse(null);
         if (game == null) {
             game = Game.builder()
                     .name(raw.getName().trim())
                     .registrationSource(GameRegistrationSource.IGDB)
-                    .reviewStatus(GameReviewStatus.CONFIRMED)
-                    .registrationConfidence(request.getConfidenceScore())
-                    .sourceArticleId(request.getArticleId())
                     .build();
             game = gameRepository.save(game);
         }
@@ -495,7 +491,7 @@ public class EntityReviewService {
 
     private Long rollbackResolvedRelation(EntityReview review) {
         Long articleId = review.getArticle().getId();
-        Long topicId = topicArticleRepository.findFirstByArticle_IdOrderByCreatedAtAsc(articleId)
+        Long topicId = topicArticleRepository.findByArticle_Id(articleId)
                 .map(link -> link.getTopic().getId())
                 .orElse(null);
 

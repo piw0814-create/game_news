@@ -30,9 +30,6 @@ CREATE TABLE IF NOT EXISTS games (
     enrichment_status       VARCHAR(30) DEFAULT 'NOT_ENRICHED',
     last_enriched_at        DATETIME(6),
     registration_source     VARCHAR(20)     NOT NULL DEFAULT 'MANUAL' COMMENT 'MANUAL | AI | IGDB',
-    review_status           VARCHAR(30)     NOT NULL DEFAULT 'CONFIRMED' COMMENT 'CONFIRMED | REVIEW_REQUIRED',
-    registration_confidence DECIMAL(5,4),
-    source_article_id       BIGINT,
     created_at              DATETIME(6)     NOT NULL,
     updated_at  DATETIME(6)     NOT NULL,
     PRIMARY KEY (id)
@@ -95,7 +92,11 @@ CREATE TABLE IF NOT EXISTS news_articles (
     published_at     DATETIME(6),
     collected_at     DATETIME(6)     NOT NULL,
     content          LONGTEXT,
+    summary          LONGTEXT,
+    keywords         LONGTEXT,
     category         VARCHAR(30)     COMMENT 'RELEASE | UPDATE | INDUSTRY | ESPORTS | EVENT | CONTROVERSY | OTHER',
+    game_news_relevant BOOLEAN,
+    entity_type      VARCHAR(30)     COMMENT 'SPECIFIC_GAME | FRANCHISE | UNNAMED_ENTRY | MIXED | NONE',
     analysis_status  VARCHAR(20)     NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | PROCESSING | COMPLETED | FAILED',
     created_at       DATETIME(6)     NOT NULL,
     updated_at       DATETIME(6)     NOT NULL,
@@ -147,14 +148,41 @@ CREATE TABLE IF NOT EXISTS article_franchises (
     FOREIGN KEY (franchise_id) REFERENCES franchises(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- Topic과 기사의 N:M 관계
+
+-- AI가 식별을 확정하지 못한 Game / Franchise 후보의 관리자 검토 및 해결 이력
+CREATE TABLE IF NOT EXISTS entity_reviews (
+    id                    BIGINT          NOT NULL AUTO_INCREMENT,
+    article_id            BIGINT          NOT NULL,
+    entity_kind           VARCHAR(20)     NOT NULL COMMENT 'GAME | FRANCHISE',
+    detected_name         VARCHAR(255)    NOT NULL,
+    ai_entity_type        VARCHAR(40),
+    is_primary            BOOLEAN         NOT NULL DEFAULT FALSE,
+    confidence_score      DECIMAL(5,4),
+    reason                VARCHAR(1000),
+    status                VARCHAR(20)     NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | RESOLVED | REJECTED',
+    candidate_json        LONGTEXT,
+    resolved_game_id      BIGINT,
+    resolved_franchise_id BIGINT,
+    resolved_at           DATETIME(6),
+    created_at            DATETIME(6)     NOT NULL,
+    updated_at            DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id),
+    KEY idx_entity_reviews_status_created (status, created_at),
+    KEY idx_entity_reviews_article (article_id),
+    FOREIGN KEY (article_id) REFERENCES news_articles(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- resolved_game_id / resolved_franchise_id는 해결 이력 스냅샷 ID다.
+-- 병합 시 애플리케이션이 새 Catalog ID로 재지정하며, 검토 이력 보존을 위해 물리 FK는 두지 않는다.
+
+-- Topic과 기사의 관계. 기사 하나는 정확히 하나의 Topic에만 귀속된다.
 CREATE TABLE IF NOT EXISTS topic_articles (
     id          BIGINT      NOT NULL AUTO_INCREMENT,
     topic_id    BIGINT      NOT NULL,
     article_id  BIGINT      NOT NULL,
     created_at  DATETIME(6) NOT NULL,
     PRIMARY KEY (id),
-    UNIQUE KEY uq_topic_article (topic_id, article_id),
+    UNIQUE KEY uq_topic_article_article (article_id),
     FOREIGN KEY (topic_id) REFERENCES topics(id),
     FOREIGN KEY (article_id) REFERENCES news_articles(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
@@ -186,6 +214,30 @@ CREATE TABLE IF NOT EXISTS topic_franchises (
     UNIQUE KEY uq_topic_franchise (topic_id, franchise_id),
     FOREIGN KEY (topic_id) REFERENCES topics(id),
     FOREIGN KEY (franchise_id) REFERENCES franchises(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- Topic 좋아요 (User Service 경계의 user_id에는 DB FK를 걸지 않음)
+CREATE TABLE IF NOT EXISTS topic_likes (
+    id          BIGINT      NOT NULL AUTO_INCREMENT,
+    topic_id    BIGINT      NOT NULL,
+    user_id     BIGINT      NOT NULL,
+    created_at  DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_topic_like_user (topic_id, user_id),
+    FOREIGN KEY (topic_id) REFERENCES topics(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Topic 댓글 (User Service 경계의 user_id에는 DB FK를 걸지 않음)
+CREATE TABLE IF NOT EXISTS topic_comments (
+    id           BIGINT        NOT NULL AUTO_INCREMENT,
+    topic_id     BIGINT        NOT NULL,
+    user_id      BIGINT        NOT NULL,
+    author_name  VARCHAR(100)  NOT NULL,
+    content      VARCHAR(1000) NOT NULL,
+    created_at   DATETIME(6)   NOT NULL,
+    PRIMARY KEY (id),
+    FOREIGN KEY (topic_id) REFERENCES topics(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 사용자의 관심 게임 (MSA 경계를 넘는 ID이므로 users/games에 DB FK를 걸지 않음)

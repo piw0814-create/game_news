@@ -1,6 +1,7 @@
 package com.gamenews.news.entity;
 
 import com.gamenews.news.enums.AnalysisStatus;
+import com.gamenews.news.enums.ArticleEntityType;
 import com.gamenews.news.enums.NewsCategory;
 import com.gamenews.news.enums.SourceType;
 import jakarta.persistence.Column;
@@ -72,6 +73,13 @@ public class NewsArticle {
     @Column(length = 30)
     private NewsCategory category;
 
+    @Column(name = "game_news_relevant")
+    private Boolean gameNewsRelevant;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "entity_type", length = 30)
+    private ArticleEntityType entityType;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "analysis_status", nullable = false, length = 20)
     private AnalysisStatus analysisStatus;
@@ -88,10 +96,17 @@ public class NewsArticle {
         this.analysisStatus = analysisStatus;
     }
 
-    public void completeAnalysis(String summary, NewsCategory category, String keywords) {
+    public void completeAnalysis(
+            String summary,
+            NewsCategory category,
+            String keywords,
+            Boolean gameNewsRelevant,
+            ArticleEntityType entityType) {
         this.summary = summary;
         this.category = category;
         this.keywords = keywords;
+        this.gameNewsRelevant = gameNewsRelevant;
+        this.entityType = entityType;
         this.analysisStatus = AnalysisStatus.COMPLETED;
     }
 }

@@ -21,7 +21,6 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -91,16 +90,6 @@ public class Game {
     @Column(name = "registration_source", nullable = false, length = 20)
     private GameRegistrationSource registrationSource = GameRegistrationSource.MANUAL;
 
-    @Builder.Default
-    @Enumerated(EnumType.STRING)
-    @Column(name = "review_status", nullable = false, length = 30)
-    private GameReviewStatus reviewStatus = GameReviewStatus.CONFIRMED;
-
-    @Column(name = "registration_confidence", precision = 5, scale = 4)
-    private BigDecimal registrationConfidence;
-
-    @Column(name = "source_article_id")
-    private Long sourceArticleId;
 
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
@@ -137,13 +126,6 @@ public class Game {
         }
     }
 
-    public void confirmReview() {
-        this.reviewStatus = GameReviewStatus.CONFIRMED;
-    }
-
-    public void requireReview() {
-        this.reviewStatus = GameReviewStatus.REVIEW_REQUIRED;
-    }
 
     public void clearDisplayName() {
         this.displayName = null;
@@ -237,7 +219,6 @@ public class Game {
         if (!isBlank(imageUrl)) this.imageUrl = imageUrl.trim();
         this.igdbGameType = trimToNullSafe(igdbGameType);
         this.versionParentIgdbId = versionParentIgdbId;
-        this.reviewStatus = GameReviewStatus.CONFIRMED;
     }
 
     public void markEnrichmentFailed() {

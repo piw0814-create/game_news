@@ -124,7 +124,7 @@ public class TopicIntegrationService {
         NewsArticle article = findArticleById(request.getArticleId());
 
         Optional<TopicArticle> existingLink = topicArticleRepository
-                .findFirstByArticle_IdOrderByCreatedAtAsc(article.getId());
+                .findByArticle_Id(article.getId());
         if (existingLink.isPresent()) {
             Topic existingTopic = existingLink.get().getTopic();
             syncArticleGamesToTopic(existingTopic, article.getId());
@@ -162,7 +162,7 @@ public class TopicIntegrationService {
     public Long refreshRelationsForArticle(Long articleId) {
         NewsArticle article = findArticleById(articleId);
         Optional<TopicArticle> existingLink = topicArticleRepository
-                .findFirstByArticle_IdOrderByCreatedAtAsc(articleId);
+                .findByArticle_Id(articleId);
         if (existingLink.isEmpty()) {
             return null;
         }

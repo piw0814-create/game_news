@@ -25,8 +25,8 @@ import java.time.LocalDateTime;
 @Table(
         name = "topic_articles",
         uniqueConstraints = @UniqueConstraint(
-                name = "uq_topic_article",
-                columnNames = {"topic_id", "article_id"}
+                name = "uq_topic_article_article",
+                columnNames = {"article_id"}
         )
 )
 @Getter

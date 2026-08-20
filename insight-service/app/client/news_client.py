@@ -6,10 +6,10 @@ import httpx
 from app.config.settings import settings
 from app.model.schemas import (
     AnalysisStatus,
+    ArticleEntityType,
     ArticleFranchiseResponse,
     ArticleGameResponse,
     FranchiseResponse,
-    GameResolveOrCreateResponse,
     EntityResolveResponse,
     GameResponse,
     NewsArticleResponse,
@@ -47,25 +47,6 @@ class NewsServiceClient:
     def get_franchises(self) -> List[FranchiseResponse]:
         data = self._request("GET", "/api/franchises")
         return [FranchiseResponse.model_validate(item) for item in data]
-
-    def resolve_or_create_ai_game(
-        self,
-        name: str,
-        review_status: str,
-        registration_confidence: float,
-        source_article_id: int,
-    ) -> GameResolveOrCreateResponse:
-        data = self._request(
-            "POST",
-            "/api/internal/games/resolve-or-create",
-            json={
-                "name": name,
-                "reviewStatus": review_status,
-                "registrationConfidence": registration_confidence,
-                "sourceArticleId": source_article_id,
-            },
-        )
-        return GameResolveOrCreateResponse.model_validate(data)
 
     def resolve_game_entity(
         self,
@@ -174,6 +155,8 @@ class NewsServiceClient:
         summary: str,
         category: NewsCategory,
         keywords: List[str],
+        game_news_relevant: bool,
+        entity_type: ArticleEntityType,
     ) -> NewsArticleResponse:
         data = self._request(
             "PUT",
@@ -182,6 +165,8 @@ class NewsServiceClient:
                 "summary": summary,
                 "category": category.value,
                 "keywords": keywords,
+                "gameNewsRelevant": game_news_relevant,
+                "entityType": entity_type.value,
             },
         )
         return NewsArticleResponse.model_validate(data)

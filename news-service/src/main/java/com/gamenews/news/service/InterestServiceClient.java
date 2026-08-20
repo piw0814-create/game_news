@@ -31,15 +31,4 @@ public class InterestServiceClient {
         }
     }
 
-    public void deleteGameReferences(Long gameId) {
-        try {
-            webClient.delete()
-                    .uri("/api/internal/interests/games/{gameId}", gameId)
-                    .retrieve()
-                    .toBodilessEntity()
-                    .block();
-        } catch (RuntimeException e) {
-            throw new IllegalStateException("Interest Service 게임 관심관계 제거에 실패했습니다", e);
-        }
-    }
 }

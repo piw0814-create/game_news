@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class NewsCategory(str, Enum):
@@ -42,6 +42,8 @@ class NewsArticleResponse(BaseModel):
     summary: Optional[str] = None
     keywords: List[str] = Field(default_factory=list)
     category: Optional[NewsCategory] = None
+    gameNewsRelevant: Optional[bool] = None
+    entityType: Optional[ArticleEntityType] = None
     analysisStatus: AnalysisStatus
     createdAt: Optional[datetime] = None
     updatedAt: Optional[datetime] = None
@@ -58,9 +60,6 @@ class GameResponse(BaseModel):
     platform: Optional[str] = None
     imageUrl: Optional[str] = None
     registrationSource: Optional[str] = None
-    reviewStatus: Optional[str] = None
-    registrationConfidence: Optional[float] = None
-    sourceArticleId: Optional[int] = None
     createdAt: Optional[datetime] = None
     updatedAt: Optional[datetime] = None
 
@@ -88,11 +87,6 @@ class ArticleFranchiseResponse(BaseModel):
     confidenceScore: Optional[float] = None
     relevanceReason: Optional[str] = None
     createdAt: Optional[datetime] = None
-
-
-class GameResolveOrCreateResponse(BaseModel):
-    created: bool
-    game: GameResponse
 
 
 class EntityResolutionOutcome(str, Enum):
@@ -136,8 +130,8 @@ class RelatedGameAnalysis(BaseModel):
     )
     reason: str = Field(
         min_length=1,
-        max_length=1000,
-        description="단순 문자열 일치가 아니라 이 기사가 실제 해당 특정 게임을 다룬다고 판단한 짧은 근거",
+        max_length=300,
+        description="단순 문자열 일치가 아니라 이 기사가 실제 해당 특정 게임을 다룬다고 판단한 한 문장의 짧은 근거",
     )
 
 
@@ -157,8 +151,8 @@ class RelatedFranchiseAnalysis(BaseModel):
     )
     reason: str = Field(
         min_length=1,
-        max_length=1000,
-        description="프랜차이즈 전체 또는 정식 작품명이 특정되지 않은 차기작 범위라고 판단한 짧은 근거",
+        max_length=300,
+        description="프랜차이즈 전체 또는 정식 작품명이 특정되지 않은 차기작 범위라고 판단한 한 문장의 짧은 근거",
     )
 
 
@@ -190,6 +184,49 @@ class ArticleAnalysisResult(BaseModel):
         max_length=3,
         description="특정 작품이 아니라 프랜차이즈/IP 전체를 직접 다루는 경우의 프랜차이즈. 없으면 빈 배열",
     )
+
+
+    @model_validator(mode="after")
+    def normalize_entity_scope(self):
+        """LLM의 엔티티 범위와 관계 목록이 모순되지 않도록 정규화한다."""
+        if not self.gameNewsRelevant:
+            self.entityType = ArticleEntityType.NONE
+            self.relatedGames = []
+            self.relatedFranchises = []
+            return self
+
+        if self.entityType == ArticleEntityType.NONE:
+            self.relatedGames = []
+            self.relatedFranchises = []
+            return self
+
+        if self.entityType == ArticleEntityType.SPECIFIC_GAME:
+            self.relatedGames = [
+                game for game in self.relatedGames
+                if game.entityType == ArticleEntityType.SPECIFIC_GAME
+            ]
+            self.relatedFranchises = []
+            return self
+
+        if self.entityType in {ArticleEntityType.FRANCHISE, ArticleEntityType.UNNAMED_ENTRY}:
+            self.relatedGames = []
+            self.relatedFranchises = [
+                franchise for franchise in self.relatedFranchises
+                if franchise.entityType in {ArticleEntityType.FRANCHISE, ArticleEntityType.UNNAMED_ENTRY}
+            ]
+            return self
+
+        if self.entityType == ArticleEntityType.MIXED:
+            self.relatedGames = [
+                game for game in self.relatedGames
+                if game.entityType == ArticleEntityType.SPECIFIC_GAME
+            ]
+            self.relatedFranchises = [
+                franchise for franchise in self.relatedFranchises
+                if franchise.entityType in {ArticleEntityType.FRANCHISE, ArticleEntityType.UNNAMED_ENTRY}
+            ]
+
+        return self
 
 
 class TopicCandidateResponse(BaseModel):

@@ -2,6 +2,7 @@ import logging
 from typing import List
 
 from openai import OpenAI
+from pydantic import ValidationError
 
 from app.config.settings import settings
 from app.model.schemas import (
@@ -12,6 +13,10 @@ from app.model.schemas import (
 )
 
 logger = logging.getLogger(__name__)
+
+
+class StructuredOutputParseError(RuntimeError):
+    """Structured Output이 비어 있거나 파싱되지 않은 경우의 재시도 대상 오류."""
 
 
 class OpenAIArticleAnalyzer:
@@ -35,27 +40,51 @@ class OpenAIArticleAnalyzer:
             settings.openai_model,
         )
 
-        response = client.responses.parse(
-            model=settings.openai_model,
-            input=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You analyze game-news articles for a Korean game intelligence feed. "
-                        "Return only the requested structured result. "
-                        "Do not perform Topic grouping, importance scoring, or why-important analysis. "
-                        "Use only facts supported by the supplied article."
-                    ),
-                },
-                {"role": "user", "content": prompt},
-            ],
-            text_format=ArticleAnalysisResult,
-            max_output_tokens=settings.openai_max_output_tokens,
-        )
+        result = None
+        for attempt in range(2):
+            try:
+                response = client.responses.parse(
+                    model=settings.openai_model,
+                    input=[
+                        {
+                            "role": "system",
+                            "content": (
+                                "You analyze game-news articles for a Korean game intelligence feed. "
+                                "Return only the requested structured result. "
+                                "Do not perform Topic grouping, importance scoring, or why-important analysis. "
+                                "Use only facts supported by the supplied article."
+                            ),
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    text_format=ArticleAnalysisResult,
+                    max_output_tokens=settings.openai_max_output_tokens,
+                )
 
-        result = response.output_parsed
+                result = response.output_parsed
+                if result is None:
+                    raise StructuredOutputParseError(
+                        "OpenAI Structured Output을 파싱하지 못했습니다"
+                    )
+                break
+            except (ValidationError, StructuredOutputParseError) as exc:
+                if attempt == 0:
+                    logger.warning(
+                        "[OpenAI] Structured Output 파싱 실패 - articleId=%s retry=1/1 error=%s",
+                        article.id,
+                        exc,
+                    )
+                    continue
+
+                logger.error(
+                    "[OpenAI] Structured Output 파싱 재시도 실패 - articleId=%s error=%s",
+                    article.id,
+                    exc,
+                )
+                raise
+
         if result is None:
-            raise RuntimeError("OpenAI Structured Output을 파싱하지 못했습니다")
+            raise StructuredOutputParseError("OpenAI Structured Output을 파싱하지 못했습니다")
 
         logger.info(
             "[OpenAI] 기사 분석 완료 - articleId=%s relevant=%s entityType=%s category=%s games=%s franchises=%s keywords=%s",
@@ -155,7 +184,7 @@ Rules:
 - When entityType=FRANCHISE or UNNAMED_ENTRY, do not populate relatedGames unless the article separately identifies another specific game; if so, use MIXED at article level.
 - Mark only the main game as isPrimary=true. If there is no clear main game, all may be false.
 - confidenceScore must be between 0 and 1 and should reflect contextual certainty that the article is actually about that game, not just text similarity.
-- reason: for every related game, briefly state the contextual evidence that makes it a game reference (for example title mention + developer/publisher/gameplay/release context). Do not cite mere substring matching as evidence.
+- reason: for every related game/franchise, use one concise Korean sentence (maximum 300 characters) stating only the contextual evidence. Do not cite mere substring matching as evidence.
 - When uncertain whether a common word is a game title, omit it from relatedGames rather than guessing.
 - Do not invent facts not contained in the article.
 

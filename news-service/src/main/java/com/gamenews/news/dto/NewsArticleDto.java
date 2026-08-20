@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gamenews.news.entity.NewsArticle;
 import com.gamenews.news.enums.AnalysisStatus;
+import com.gamenews.news.enums.ArticleEntityType;
 import com.gamenews.news.enums.NewsCategory;
 import com.gamenews.news.enums.SourceType;
 import jakarta.validation.Valid;
@@ -78,6 +79,12 @@ public class NewsArticleDto {
         @NotNull(message = "키워드 목록은 필수입니다")
         @Size(max = 10, message = "키워드는 최대 10개까지 저장할 수 있습니다")
         private List<@Valid @NotBlank(message = "빈 키워드는 저장할 수 없습니다") String> keywords;
+
+        @NotNull(message = "게임 뉴스 관련성 판단은 필수입니다")
+        private Boolean gameNewsRelevant;
+
+        @NotNull(message = "기사 엔티티 유형은 필수입니다")
+        private ArticleEntityType entityType;
     }
 
     @Getter
@@ -96,6 +103,8 @@ public class NewsArticleDto {
         private String summary;
         private List<String> keywords;
         private NewsCategory category;
+        private Boolean gameNewsRelevant;
+        private ArticleEntityType entityType;
         private AnalysisStatus analysisStatus;
         private OffsetDateTime createdAt;
         private OffsetDateTime updatedAt;
@@ -113,6 +122,8 @@ public class NewsArticleDto {
                     .summary(article.getSummary())
                     .keywords(parseKeywords(article.getKeywords()))
                     .category(article.getCategory())
+                    .gameNewsRelevant(article.getGameNewsRelevant())
+                    .entityType(article.getEntityType())
                     .analysisStatus(article.getAnalysisStatus())
                     .createdAt(toUtc(article.getCreatedAt()))
                     .updatedAt(toUtc(article.getUpdatedAt()))

@@ -2,13 +2,13 @@ package com.gamenews.news.service;
 
 import com.gamenews.news.dto.GameDto;
 import com.gamenews.news.entity.ArticleGame;
+import com.gamenews.news.entity.EntityReview;
 import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.GameAlias;
 import com.gamenews.news.entity.GameFranchise;
-import com.gamenews.news.entity.GameReviewStatus;
-import com.gamenews.news.entity.GameRegistrationSource;
 import com.gamenews.news.entity.TopicGame;
 import com.gamenews.news.repository.ArticleGameRepository;
+import com.gamenews.news.repository.EntityReviewRepository;
 import com.gamenews.news.repository.GameRepository;
 import com.gamenews.news.repository.GameFranchiseRepository;
 import com.gamenews.news.repository.TopicGameRepository;
@@ -28,14 +28,11 @@ public class GameAdminService {
     private final ArticleGameRepository articleGameRepository;
     private final TopicGameRepository topicGameRepository;
     private final GameFranchiseRepository gameFranchiseRepository;
+    private final EntityReviewRepository entityReviewRepository;
     private final InterestServiceClient interestServiceClient;
 
-    public List<GameDto.GameResponse> getGames(GameReviewStatus reviewStatus) {
-        List<Game> games = reviewStatus == null
-                ? gameRepository.findAllByOrderByCreatedAtDesc()
-                : gameRepository.findAllByReviewStatusOrderByCreatedAtDesc(reviewStatus);
-
-        return games.stream()
+    public List<GameDto.GameResponse> getGames() {
+        return gameRepository.findAllByOrderByCreatedAtDesc().stream()
                 .map(GameDto.GameResponse::from)
                 .toList();
     }
@@ -113,12 +110,6 @@ public class GameAdminService {
         return GameDto.GameResponse.from(game);
     }
 
-    @Transactional
-    public GameDto.GameResponse confirmGame(Long id) {
-        Game game = findGameById(id);
-        game.confirmReview();
-        return GameDto.GameResponse.from(game);
-    }
 
     @Transactional
     public GameDto.GameResponse mergeGame(Long sourceGameId, Long targetGameId) {
@@ -136,6 +127,7 @@ public class GameAdminService {
         mergeArticleGames(sourceGameId, targetGame);
         mergeTopicGames(sourceGameId, targetGame);
         mergeGameFranchises(sourceGameId, targetGame);
+        reassignEntityReviews(sourceGameId, targetGameId);
         mergeGameIdentities(sourceGame, targetGame);
 
         articleGameRepository.flush();
@@ -147,33 +139,13 @@ public class GameAdminService {
         return GameDto.GameResponse.from(targetGame);
     }
 
-    @Transactional
-    public void rejectGame(Long gameId) {
-        Game game = findGameById(gameId);
-        if (game.getReviewStatus() == GameReviewStatus.CONFIRMED
-                && game.getRegistrationSource() != GameRegistrationSource.AI) {
-            throw new IllegalArgumentException(
-                    "수동 확정 게임은 관련 없음으로 처리할 수 없습니다. 수정 또는 병합을 사용하세요");
+
+
+    private void reassignEntityReviews(Long sourceGameId, Long targetGameId) {
+        for (EntityReview review : entityReviewRepository.findAllByResolvedGameId(sourceGameId)) {
+            review.reassignResolvedGame(targetGameId);
         }
-
-        // Interest 관계를 먼저 제거해 삭제된 Game ID를 UserGame이 가리키지 않게 한다.
-        interestServiceClient.deleteGameReferences(gameId);
-
-        List<ArticleGame> articleGames = articleGameRepository.findAllByGame_IdOrderByIdAsc(gameId);
-        List<TopicGame> topicGames = topicGameRepository.findAllByGame_IdOrderByIdAsc(gameId);
-        List<GameFranchise> gameFranchises = gameFranchiseRepository.findAllByGame_IdOrderByPrimaryDescCreatedAtAsc(gameId);
-
-        articleGameRepository.deleteAll(articleGames);
-        topicGameRepository.deleteAll(topicGames);
-        gameFranchiseRepository.deleteAll(gameFranchises);
-        articleGameRepository.flush();
-        topicGameRepository.flush();
-        gameFranchiseRepository.flush();
-
-        gameRepository.delete(game);
-        gameRepository.flush();
     }
-
 
     private void mergeGameIdentities(Game sourceGame, Game targetGame) {
         List<String> sourceAliases = sourceGame.getAliases().stream()

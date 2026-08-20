@@ -39,7 +39,7 @@ class Settings(BaseSettings):
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-luna"
     openai_max_content_chars: int = 12000
-    openai_max_output_tokens: int = 1200
+    openai_max_output_tokens: int = 3000
     openai_known_games_limit: int = 200
     openai_known_franchises_limit: int = 100
     openai_topic_match_max_output_tokens: int = 500

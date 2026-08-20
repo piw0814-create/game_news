@@ -29,10 +29,6 @@ export const gameApi = {
     return api.patch(`/api/admin/games/${gameId}`, payload)
   },
 
-  getAdminReviewContext(gameId) {
-    return api.get(`/api/admin/games/${gameId}/review-context`)
-  },
-
   previewAdminEnrichment(gameId) {
     return api.post(`/api/admin/games/${gameId}/enrichment/preview`, null, { timeout: IGDB_REQUEST_TIMEOUT_MS })
   },
@@ -43,13 +39,5 @@ export const gameApi = {
 
   mergeAdmin(sourceGameId, targetGameId) {
     return api.post(`/api/admin/games/${sourceGameId}/merge`, { targetGameId })
-  },
-
-  resolveAdminAsFranchise(gameId, franchiseId) {
-    return api.post(`/api/admin/games/${gameId}/resolve-franchise`, { franchiseId })
-  },
-
-  rejectAdmin(gameId) {
-    return api.post(`/api/admin/games/${gameId}/reject`)
   }
 }
