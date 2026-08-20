@@ -127,11 +127,14 @@ importanceScore
 ```text
 personalizedScore
 = importanceScore
-+ 관심 게임 보너스(30)
++ 관심 게임 직접 보너스(30)
++ 관심 게임 소속 Franchise Topic 보너스(10)
 + 최신성 보너스(최대 10)
 ```
 
 `personalizedScore`는 DB에 저장하지 않고 Vue에서 Feed 정렬에 사용합니다. 상단 `오늘 주요뉴스`는 개인화하지 않고 `importanceScore` 기준으로 유지합니다.
+
+`TopicGame`은 특정 작품 중심 Topic만, `TopicFranchise`는 IP/프랜차이즈 전체 중심 Topic만 표현합니다. 같은 프랜차이즈의 다른 특정 게임 Topic에는 Franchise 보너스를 전파하지 않습니다.
 
 ## 수집 / 자동 분석 운영
 

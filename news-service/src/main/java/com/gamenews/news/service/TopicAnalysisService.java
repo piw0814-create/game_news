@@ -5,8 +5,10 @@ import com.gamenews.news.dto.TopicDto;
 import com.gamenews.news.entity.Topic;
 import com.gamenews.news.entity.TopicArticle;
 import com.gamenews.news.entity.TopicGame;
+import com.gamenews.news.entity.TopicFranchise;
 import com.gamenews.news.repository.TopicArticleRepository;
 import com.gamenews.news.repository.TopicGameRepository;
+import com.gamenews.news.repository.TopicFranchiseRepository;
 import com.gamenews.news.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -22,15 +24,18 @@ public class TopicAnalysisService {
     private final TopicRepository topicRepository;
     private final TopicArticleRepository topicArticleRepository;
     private final TopicGameRepository topicGameRepository;
+    private final TopicFranchiseRepository topicFranchiseRepository;
 
     public TopicAnalysisDto.ContextResponse getAnalysisContext(Long topicId) {
         Topic topic = findTopicById(topicId);
         List<TopicGame> topicGames = topicGameRepository
                 .findAllByTopic_IdOrderByPrimaryDescCreatedAtAsc(topicId);
+        List<TopicFranchise> topicFranchises = topicFranchiseRepository
+                .findAllByTopic_IdOrderByPrimaryDescCreatedAtAsc(topicId);
         List<TopicArticle> topicArticles = topicArticleRepository
                 .findAllByTopic_IdOrderByCreatedAtAsc(topicId);
 
-        return TopicAnalysisDto.ContextResponse.from(topic, topicGames, topicArticles);
+        return TopicAnalysisDto.ContextResponse.from(topic, topicGames, topicFranchises, topicArticles);
     }
 
     @Transactional

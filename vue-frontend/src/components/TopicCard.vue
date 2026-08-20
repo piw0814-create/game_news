@@ -4,11 +4,12 @@
       <div class="topic-meta">
         <div class="meta-left">
           <span class="category">{{ categoryLabel }}</span>
+          <span v-if="primaryFranchise" class="franchise-label">프랜차이즈 · {{ primaryFranchise }}</span>
           <span v-if="dateLabel" class="meta-dot">·</span>
           <time v-if="dateLabel">{{ dateLabel }}</time>
         </div>
         <div class="meta-right">
-          <span v-if="interested" class="interest-badge">관심 게임</span>
+          <span v-if="interested" class="interest-badge">{{ interestBadgeLabel }}</span>
           <span class="importance">중요도 <strong>{{ topic.importanceScore ?? '-' }}</strong></span>
         </div>
       </div>
@@ -42,6 +43,10 @@ const props = defineProps({
   interested: {
     type: Boolean,
     default: false
+  },
+  interestType: {
+    type: String,
+    default: null
   }
 })
 
@@ -57,6 +62,14 @@ const CATEGORY_LABELS = {
 }
 
 const categoryLabel = computed(() => CATEGORY_LABELS[props.topic.category] || props.topic.category || '기타')
+const primaryFranchise = computed(() => {
+  const franchises = Array.isArray(props.topic.franchises) ? props.topic.franchises : []
+  const franchise = franchises.find((item) => item?.isPrimary) || franchises[0]
+  return franchise ? (franchise.displayName || franchise.name) : ''
+})
+const interestBadgeLabel = computed(() =>
+  props.interestType === 'franchise' ? '관심 프랜차이즈' : '관심 게임'
+)
 
 const dateLabel = computed(() => {
   const value = props.topic.lastUpdatedAt || props.topic.firstSeenAt || props.topic.createdAt
@@ -130,6 +143,11 @@ const dateLabel = computed(() => {
 
 .category {
   color: var(--color-primary);
+  font-weight: 700;
+}
+
+.franchise-label {
+  color: #626975;
   font-weight: 700;
 }
 

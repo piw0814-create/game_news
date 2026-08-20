@@ -25,6 +25,19 @@ public interface TopicRepository extends JpaRepository<Topic, Long> {
             @Param("cutoff") LocalDateTime cutoff,
             Pageable pageable);
 
+
+    @Query("""
+            select distinct tf.topic
+            from TopicFranchise tf
+            where tf.franchise.id in :franchiseIds
+              and tf.topic.lastUpdatedAt >= :cutoff
+            order by tf.topic.lastUpdatedAt desc
+            """)
+    List<Topic> findCandidatesByFranchiseIdsAndUpdatedAfter(
+            @Param("franchiseIds") List<Long> franchiseIds,
+            @Param("cutoff") LocalDateTime cutoff,
+            Pageable pageable);
+
     @Query("""
             select t
             from Topic t

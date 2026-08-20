@@ -100,6 +100,20 @@ class OpenAITopicAnalyzer:
             )
         game_text = "\n\n---\n\n".join(game_blocks) or "(none)"
 
+        franchise_blocks = []
+        for franchise in context.franchises:
+            franchise_blocks.append(
+                "\n".join(
+                    [
+                        f"Canonical name: {franchise.name}",
+                        f"Display name: {franchise.displayName or franchise.name}",
+                        f"Aliases: {', '.join(franchise.aliases) if franchise.aliases else '-'}",
+                        f"Primary: {franchise.isPrimary}",
+                    ]
+                )
+            )
+        franchise_text = "\n\n---\n\n".join(franchise_blocks) or "(none)"
+
         article_blocks = []
         for article in articles:
             summary = (article.summary or "").strip()[:2000]
@@ -147,6 +161,9 @@ Category: {context.topic.category.value if context.topic.category else 'unknown'
 
 Related games:
 {game_text}
+
+Related franchises:
+{franchise_text}
 
 Articles used for semantic analysis:
 {article_text}

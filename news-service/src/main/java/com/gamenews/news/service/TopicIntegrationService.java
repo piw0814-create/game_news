@@ -1,15 +1,19 @@
 package com.gamenews.news.service;
 
 import com.gamenews.news.dto.TopicIntegrationDto;
+import com.gamenews.news.entity.ArticleFranchise;
 import com.gamenews.news.entity.ArticleGame;
 import com.gamenews.news.entity.NewsArticle;
 import com.gamenews.news.entity.Topic;
 import com.gamenews.news.entity.TopicArticle;
 import com.gamenews.news.entity.TopicGame;
+import com.gamenews.news.entity.TopicFranchise;
+import com.gamenews.news.repository.ArticleFranchiseRepository;
 import com.gamenews.news.repository.ArticleGameRepository;
 import com.gamenews.news.repository.NewsArticleRepository;
 import com.gamenews.news.repository.TopicArticleRepository;
 import com.gamenews.news.repository.TopicGameRepository;
+import com.gamenews.news.repository.TopicFranchiseRepository;
 import com.gamenews.news.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
@@ -31,13 +35,17 @@ public class TopicIntegrationService {
     private final TopicRepository topicRepository;
     private final TopicArticleRepository topicArticleRepository;
     private final TopicGameRepository topicGameRepository;
+    private final TopicFranchiseRepository topicFranchiseRepository;
     private final NewsArticleRepository newsArticleRepository;
     private final ArticleGameRepository articleGameRepository;
+    private final ArticleFranchiseRepository articleFranchiseRepository;
 
     public List<TopicIntegrationDto.CandidateResponse> getCandidates(
             TopicIntegrationDto.CandidateRequest request) {
         NewsArticle article = findArticleById(request.getArticleId());
         List<ArticleGame> articleGames = articleGameRepository
+                .findAllByArticle_IdOrderByPrimaryDescCreatedAtAsc(article.getId());
+        List<ArticleFranchise> articleFranchises = articleFranchiseRepository
                 .findAllByArticle_IdOrderByPrimaryDescCreatedAtAsc(article.getId());
 
         LocalDateTime referenceTime = article.getPublishedAt() != null
@@ -61,6 +69,28 @@ public class TopicIntegrationService {
                             PageRequest.of(0, request.getLimit()));
 
             for (Topic topic : gameCandidates) {
+                if (candidateIds.add(topic.getId())) {
+                    candidates.add(topic);
+                }
+            }
+        }
+
+        if (!articleFranchises.isEmpty() && candidates.size() < request.getLimit()) {
+            List<Long> franchiseIds = articleFranchises.stream()
+                    .map(articleFranchise -> articleFranchise.getFranchise().getId())
+                    .distinct()
+                    .toList();
+
+            List<Topic> franchiseCandidates = topicRepository
+                    .findCandidatesByFranchiseIdsAndUpdatedAfter(
+                            franchiseIds,
+                            cutoff,
+                            PageRequest.of(0, request.getLimit()));
+
+            for (Topic topic : franchiseCandidates) {
+                if (candidates.size() >= request.getLimit()) {
+                    break;
+                }
                 if (candidateIds.add(topic.getId())) {
                     candidates.add(topic);
                 }
@@ -96,8 +126,11 @@ public class TopicIntegrationService {
         Optional<TopicArticle> existingLink = topicArticleRepository
                 .findFirstByArticle_IdOrderByCreatedAtAsc(article.getId());
         if (existingLink.isPresent()) {
+            Topic existingTopic = existingLink.get().getTopic();
+            syncArticleGamesToTopic(existingTopic, article.getId());
+            syncArticleFranchisesToTopic(existingTopic, article.getId());
             return TopicIntegrationDto.IntegrateResponse.builder()
-                    .topicId(existingLink.get().getTopic().getId())
+                    .topicId(existingTopic.getId())
                     .action(TopicIntegrationDto.IntegrationAction.ALREADY_LINKED)
                     .build();
         }
@@ -113,6 +146,7 @@ public class TopicIntegrationService {
                 .build());
 
         syncArticleGamesToTopic(topic, article.getId());
+        syncArticleFranchisesToTopic(topic, article.getId());
         updateLastUpdatedAt(topic, article);
 
         return TopicIntegrationDto.IntegrateResponse.builder()
@@ -162,6 +196,28 @@ public class TopicIntegrationService {
                     .primary(articleGame.isPrimary())
                     .relevanceScore(articleGame.getConfidenceScore())
                     .build());
+        }
+    }
+
+    private void syncArticleFranchisesToTopic(Topic topic, Long articleId) {
+        List<ArticleFranchise> articleFranchises = articleFranchiseRepository
+                .findAllByArticle_IdOrderByPrimaryDescCreatedAtAsc(articleId);
+
+        for (ArticleFranchise articleFranchise : articleFranchises) {
+            Long franchiseId = articleFranchise.getFranchise().getId();
+            TopicFranchise topicFranchise = topicFranchiseRepository
+                    .findByTopic_IdAndFranchise_Id(topic.getId(), franchiseId)
+                    .orElseGet(() -> TopicFranchise.builder()
+                            .topic(topic)
+                            .franchise(articleFranchise.getFranchise())
+                            .primary(articleFranchise.isPrimary())
+                            .relevanceScore(articleFranchise.getConfidenceScore())
+                            .build());
+
+            topicFranchise.absorbMetadata(
+                    articleFranchise.isPrimary(),
+                    articleFranchise.getConfidenceScore());
+            topicFranchiseRepository.save(topicFranchise);
         }
     }
 

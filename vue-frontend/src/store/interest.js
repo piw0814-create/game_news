@@ -7,6 +7,7 @@ export const useInterestStore = defineStore('interest', () => {
   const games = ref([])
   const interests = ref([])
   const interestGameIds = ref([])
+  const interestFranchiseIds = ref([])
   const loading = ref(false)
   const idsLoading = ref(false)
   const idsError = ref(null)
@@ -18,10 +19,40 @@ export const useInterestStore = defineStore('interest', () => {
   }
 
   const interestedGameIds = computed(() => new Set(interestGameIds.value))
+  const interestedFranchiseIds = computed(() => new Set(interestFranchiseIds.value))
   const hasInterests = computed(() => interestGameIds.value.length > 0)
 
   function isInterested(gameId) {
     return interestedGameIds.value.has(gameId)
+  }
+
+  function isFranchiseInterested(franchiseId) {
+    return interestedFranchiseIds.value.has(franchiseId)
+  }
+
+  async function loadFranchiseIds(gameIds = interestGameIds.value) {
+    const uniqueGameIds = [...new Set(gameIds)].filter((gameId) => gameId != null)
+    if (!uniqueGameIds.length) {
+      interestFranchiseIds.value = []
+      return []
+    }
+
+    const results = await Promise.allSettled(
+      uniqueGameIds.map((gameId) => gameApi.getFranchises(gameId))
+    )
+
+    const franchiseIds = new Set()
+    for (const result of results) {
+      if (result.status !== 'fulfilled') continue
+      const relations = unwrap(result.value)
+      if (!Array.isArray(relations)) continue
+      relations.forEach((relation) => {
+        if (relation?.franchiseId != null) franchiseIds.add(relation.franchiseId)
+      })
+    }
+
+    interestFranchiseIds.value = [...franchiseIds]
+    return interestFranchiseIds.value
   }
 
   async function loadGameIds() {
@@ -32,11 +63,13 @@ export const useInterestStore = defineStore('interest', () => {
       const response = await interestApi.getMyGameIds()
       const data = unwrap(response)
       interestGameIds.value = Array.isArray(data) ? data : []
+      await loadFranchiseIds(interestGameIds.value)
       return interestGameIds.value
     } catch (err) {
       console.error('[InterestStore] 관심 게임 ID 조회 실패:', err)
       idsError.value = err.response?.data?.message || '관심 게임 정보를 불러오지 못했습니다.'
       interestGameIds.value = []
+      interestFranchiseIds.value = []
       return []
     } finally {
       idsLoading.value = false
@@ -59,12 +92,14 @@ export const useInterestStore = defineStore('interest', () => {
       games.value = Array.isArray(gameData) ? gameData : []
       interests.value = Array.isArray(interestData) ? interestData : []
       interestGameIds.value = interests.value.map((item) => item.gameId)
+      await loadFranchiseIds(interestGameIds.value)
     } catch (err) {
       console.error('[InterestStore] 관심 게임 초기 조회 실패:', err)
       error.value = err.response?.data?.message || '관심 게임 정보를 불러오지 못했습니다.'
       games.value = []
       interests.value = []
       interestGameIds.value = []
+      interestFranchiseIds.value = []
     } finally {
       loading.value = false
     }
@@ -81,6 +116,7 @@ export const useInterestStore = defineStore('interest', () => {
       if (saved && !isInterested(gameId)) {
         interests.value = [...interests.value, saved]
         interestGameIds.value = [...interestGameIds.value, gameId]
+        await loadFranchiseIds(interestGameIds.value)
       }
 
       return saved
@@ -101,6 +137,7 @@ export const useInterestStore = defineStore('interest', () => {
       await interestApi.removeGame(gameId)
       interests.value = interests.value.filter((item) => item.gameId !== gameId)
       interestGameIds.value = interestGameIds.value.filter((id) => id !== gameId)
+      await loadFranchiseIds(interestGameIds.value)
     } catch (err) {
       console.error('[InterestStore] 관심 게임 해제 실패:', err)
       error.value = err.response?.data?.message || '관심 게임 해제에 실패했습니다.'
@@ -118,7 +155,9 @@ export const useInterestStore = defineStore('interest', () => {
     games,
     interests,
     interestGameIds,
+    interestFranchiseIds,
     interestedGameIds,
+    interestedFranchiseIds,
     hasInterests,
     loading,
     idsLoading,
@@ -126,8 +165,10 @@ export const useInterestStore = defineStore('interest', () => {
     error,
     actionGameId,
     isInterested,
+    isFranchiseInterested,
     load,
     loadGameIds,
+    loadFranchiseIds,
     addInterest,
     removeInterest,
     clearError

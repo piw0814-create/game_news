@@ -6,6 +6,7 @@ import com.gamenews.news.entity.GameAlias;
 import com.gamenews.news.entity.Topic;
 import com.gamenews.news.entity.TopicArticle;
 import com.gamenews.news.entity.TopicGame;
+import com.gamenews.news.entity.TopicFranchise;
 import com.gamenews.news.enums.NewsCategory;
 import com.gamenews.news.enums.SourceType;
 import jakarta.validation.constraints.Max;
@@ -80,6 +81,33 @@ public class TopicAnalysisDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @JsonIgnoreProperties("primary")
+    public static class FranchiseContext {
+        private Long id;
+        private String name;
+        private String displayName;
+        private List<String> aliases;
+
+        @JsonProperty("isPrimary")
+        private boolean isPrimary;
+
+        public static FranchiseContext from(TopicFranchise topicFranchise) {
+            return FranchiseContext.builder()
+                    .id(topicFranchise.getFranchise().getId())
+                    .name(topicFranchise.getFranchise().getName())
+                    .displayName(topicFranchise.getFranchise().getDisplayName())
+                    .aliases(topicFranchise.getFranchise().getAliases().stream()
+                            .map(alias -> alias.getAlias())
+                            .toList())
+                    .isPrimary(topicFranchise.isPrimary())
+                    .build();
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class ArticleContext {
         private Long id;
         private String title;
@@ -111,15 +139,18 @@ public class TopicAnalysisDto {
     public static class ContextResponse {
         private TopicContext topic;
         private List<GameContext> games;
+        private List<FranchiseContext> franchises;
         private List<ArticleContext> articles;
 
         public static ContextResponse from(
                 Topic topic,
                 List<TopicGame> topicGames,
+                List<TopicFranchise> topicFranchises,
                 List<TopicArticle> topicArticles) {
             return ContextResponse.builder()
                     .topic(TopicContext.from(topic))
                     .games(topicGames.stream().map(GameContext::from).toList())
+                    .franchises(topicFranchises.stream().map(FranchiseContext::from).toList())
                     .articles(topicArticles.stream().map(ArticleContext::from).toList())
                     .build();
         }

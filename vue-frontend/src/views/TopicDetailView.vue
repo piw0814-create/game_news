@@ -71,6 +71,27 @@
           <p v-else class="empty-copy">연결된 게임이 없습니다.</p>
         </section>
 
+
+        <section class="detail-section">
+          <div class="section-heading">
+            <h2>관련 프랜차이즈</h2>
+            <span>{{ franchises.length }}개</span>
+          </div>
+
+          <div v-if="franchises.length" class="game-list">
+            <div v-for="franchise in franchises" :key="franchise.id" class="game-row">
+              <div>
+                <strong>{{ franchise.displayName || franchise.name }}</strong>
+                <span v-if="franchise.isPrimary" class="primary-label">주요 프랜차이즈</span>
+              </div>
+              <span v-if="franchise.relevanceScore != null" class="score-label">
+                관련도 {{ formatScore(franchise.relevanceScore) }}
+              </span>
+            </div>
+          </div>
+          <p v-else class="empty-copy">연결된 프랜차이즈가 없습니다.</p>
+        </section>
+
         <section class="detail-section">
           <div class="section-heading">
             <h2>관련 뉴스</h2>
@@ -189,6 +210,7 @@ const SOURCE_TYPE_LABELS = {
 
 const topic = computed(() => topicStore.selectedTopic)
 const games = computed(() => topic.value?.games ?? [])
+const franchises = computed(() => topic.value?.franchises ?? [])
 const articles = computed(() => topic.value?.articles ?? [])
 const categoryLabel = computed(() => {
   const category = topic.value?.category

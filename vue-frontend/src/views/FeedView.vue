@@ -37,7 +37,7 @@
             <input
               v-model.trim="searchKeyword"
               type="search"
-              placeholder="게임, 회사, 이슈 검색"
+              placeholder="게임, 프랜차이즈, 회사, 이슈 검색"
               autocomplete="off"
             />
           </label>
@@ -122,6 +122,7 @@
           v-else-if="featuredTopic"
           :topic="featuredTopic"
           :interested="hasInterestMatch(featuredTopic)"
+          :interest-type="interestMatchType(featuredTopic)"
           featured
         />
 
@@ -162,6 +163,7 @@
             :key="topic.id"
             :topic="topic"
             :interested="hasInterestMatch(topic)"
+            :interest-type="interestMatchType(topic)"
           />
         </div>
 
@@ -267,14 +269,35 @@ function compareImportance(a, b) {
   return importanceDiff !== 0 ? importanceDiff : compareLatest(a, b);
 }
 
-function hasInterestMatch(topic) {
+const DIRECT_GAME_INTEREST_BONUS = 30;
+const FRANCHISE_INTEREST_BONUS = 10;
+
+function interestMatchType(topic) {
   const gameIds = Array.isArray(topic.gameIds) ? topic.gameIds : [];
-  return gameIds.some((gameId) => interestStore.isInterested(gameId));
+  if (gameIds.some((gameId) => interestStore.isInterested(gameId))) {
+    return "game";
+  }
+
+  const franchiseIds = Array.isArray(topic.franchiseIds) ? topic.franchiseIds : [];
+  if (franchiseIds.some((franchiseId) => interestStore.isFranchiseInterested(franchiseId))) {
+    return "franchise";
+  }
+
+  return null;
+}
+
+function hasInterestMatch(topic) {
+  return interestMatchType(topic) != null;
 }
 
 function personalizedScore(topic) {
   const importanceScore = topic.importanceScore ?? 0;
-  const interestBonus = hasInterestMatch(topic) ? 30 : 0;
+  const matchType = interestMatchType(topic);
+  const interestBonus = matchType === "game"
+    ? DIRECT_GAME_INTEREST_BONUS
+    : matchType === "franchise"
+      ? FRANCHISE_INTEREST_BONUS
+      : 0;
   const recencyBonus = topic.recencyBonus ?? 0;
   return importanceScore + interestBonus + recencyBonus;
 }
@@ -306,11 +329,20 @@ const filteredTopics = computed(() => {
       ])
       .filter(Boolean);
 
+    const franchiseSearchText = (Array.isArray(topic.franchises) ? topic.franchises : [])
+      .flatMap((franchise) => [
+        franchise?.name,
+        franchise?.displayName,
+        ...(Array.isArray(franchise?.aliases) ? franchise.aliases : []),
+      ])
+      .filter(Boolean);
+
     const searchableText = [
       topic.title,
       topic.summary,
       topic.whyImportant,
       ...gameSearchText,
+      ...franchiseSearchText,
     ]
       .filter(Boolean)
       .join(" ")

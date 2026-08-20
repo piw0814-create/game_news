@@ -7,6 +7,10 @@ export const gameApi = {
     return api.get('/api/games')
   },
 
+  getFranchises(gameId) {
+    return api.get(`/api/games/${gameId}/franchises`)
+  },
+
   getAdminAll(params = {}) {
     return api.get('/api/admin/games', { params })
   },

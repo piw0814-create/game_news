@@ -4,9 +4,11 @@ import com.gamenews.news.dto.TopicDto;
 import com.gamenews.news.entity.Topic;
 import com.gamenews.news.entity.TopicArticle;
 import com.gamenews.news.entity.TopicGame;
+import com.gamenews.news.entity.TopicFranchise;
 import com.gamenews.news.repository.TopicArticleRepository;
 import com.gamenews.news.repository.TopicCommentRepository;
 import com.gamenews.news.repository.TopicGameRepository;
+import com.gamenews.news.repository.TopicFranchiseRepository;
 import com.gamenews.news.repository.TopicLikeRepository;
 import com.gamenews.news.repository.TopicRepository;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +35,7 @@ public class TopicService {
     private final TopicRepository topicRepository;
     private final TopicArticleRepository topicArticleRepository;
     private final TopicGameRepository topicGameRepository;
+    private final TopicFranchiseRepository topicFranchiseRepository;
     private final TopicLikeRepository topicLikeRepository;
     private final TopicCommentRepository topicCommentRepository;
 
@@ -56,6 +59,8 @@ public class TopicService {
         Topic saved = topicRepository.save(topic);
         return TopicDto.TopicResponse.from(
                 saved,
+                List.of(),
+                List.of(),
                 List.of(),
                 List.of(),
                 calculateRecencyBonus(saved.getLastUpdatedAt(), now),
@@ -94,6 +99,24 @@ public class TopicService {
                         Collectors.mapping(TopicDto.GameSummary::from, Collectors.toList())
                 ));
 
+        Map<Long, List<Long>> franchiseIdsByTopicId = topicFranchiseRepository.findFranchiseIdsByTopicIds(topicIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        TopicFranchiseRepository.TopicFranchiseIdView::getTopicId,
+                        Collectors.mapping(
+                                TopicFranchiseRepository.TopicFranchiseIdView::getFranchiseId,
+                                Collectors.toList()
+                        )
+                ));
+
+        Map<Long, List<TopicDto.FranchiseSummary>> franchisesByTopicId = topicFranchiseRepository
+                .findAllWithFranchiseDetailsByTopicIds(topicIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        topicFranchise -> topicFranchise.getTopic().getId(),
+                        Collectors.mapping(TopicDto.FranchiseSummary::from, Collectors.toList())
+                ));
+
         Map<Long, Long> likeCountByTopicId = topicLikeRepository.countByTopicIds(topicIds)
                 .stream()
                 .collect(Collectors.toMap(
@@ -119,6 +142,8 @@ public class TopicService {
                             topic,
                             gameIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             gamesByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
+                            franchiseIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
+                            franchisesByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             calculateRecencyBonus(topic.getLastUpdatedAt(), now),
                             calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
                             likeCount,
@@ -133,6 +158,8 @@ public class TopicService {
         Topic topic = findTopicById(id);
         List<TopicGame> topicGames = topicGameRepository
                 .findAllByTopic_IdOrderByPrimaryDescCreatedAtAsc(id);
+        List<TopicFranchise> topicFranchises = topicFranchiseRepository
+                .findAllByTopic_IdOrderByPrimaryDescCreatedAtAsc(id);
         List<TopicArticle> topicArticles = topicArticleRepository
                 .findAllByTopic_IdOrderByCreatedAtAsc(id);
 
@@ -143,6 +170,7 @@ public class TopicService {
         return TopicDto.TopicDetailResponse.from(
                 topic,
                 topicGames,
+                topicFranchises,
                 topicArticles,
                 calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
                 likeCount,

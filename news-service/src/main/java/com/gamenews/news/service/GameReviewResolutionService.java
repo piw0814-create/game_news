@@ -8,6 +8,8 @@ import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.GameReviewStatus;
 import com.gamenews.news.entity.GameRegistrationSource;
 import com.gamenews.news.entity.NewsArticle;
+import com.gamenews.news.entity.TopicFranchise;
+import com.gamenews.news.entity.TopicGame;
 import com.gamenews.news.repository.ArticleFranchiseRepository;
 import com.gamenews.news.repository.ArticleGameRepository;
 import com.gamenews.news.repository.FranchiseRepository;
@@ -15,6 +17,7 @@ import com.gamenews.news.repository.GameFranchiseRepository;
 import com.gamenews.news.repository.GameRepository;
 import com.gamenews.news.repository.NewsArticleRepository;
 import com.gamenews.news.repository.TopicGameRepository;
+import com.gamenews.news.repository.TopicFranchiseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +34,7 @@ public class GameReviewResolutionService {
     private final ArticleGameRepository articleGameRepository;
     private final ArticleFranchiseRepository articleFranchiseRepository;
     private final TopicGameRepository topicGameRepository;
+    private final TopicFranchiseRepository topicFranchiseRepository;
     private final GameFranchiseRepository gameFranchiseRepository;
     private final InterestServiceClient interestServiceClient;
 
@@ -79,12 +83,27 @@ public class GameReviewResolutionService {
             }
         }
 
+        List<TopicGame> topicGameLinks = topicGameRepository.findAllByGame_IdOrderByIdAsc(gameId);
+        for (TopicGame topicGameLink : topicGameLinks) {
+            TopicFranchise topicFranchise = topicFranchiseRepository
+                    .findByTopic_IdAndFranchise_Id(topicGameLink.getTopic().getId(), franchiseId)
+                    .orElseGet(() -> TopicFranchise.builder()
+                            .topic(topicGameLink.getTopic())
+                            .franchise(franchise)
+                            .primary(topicGameLink.isPrimary())
+                            .relevanceScore(topicGameLink.getRelevanceScore())
+                            .build());
+            topicFranchise.absorbMetadata(topicGameLink.isPrimary(), topicGameLink.getRelevanceScore());
+            topicFranchiseRepository.save(topicFranchise);
+        }
+
         interestServiceClient.deleteGameReferences(gameId);
         articleGameRepository.deleteAll(articleLinks);
-        topicGameRepository.deleteAll(topicGameRepository.findAllByGame_IdOrderByIdAsc(gameId));
+        topicGameRepository.deleteAll(topicGameLinks);
         gameFranchiseRepository.deleteAll(gameFranchiseRepository.findAllByGame_IdOrderByPrimaryDescCreatedAtAsc(gameId));
         articleGameRepository.flush();
         topicGameRepository.flush();
+        topicFranchiseRepository.flush();
         gameFranchiseRepository.flush();
         gameRepository.delete(game);
         gameRepository.flush();

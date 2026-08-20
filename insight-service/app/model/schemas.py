@@ -230,6 +230,16 @@ class TopicAnalysisGameContext(BaseModel):
     isPrimary: bool
 
 
+
+
+class TopicAnalysisFranchiseContext(BaseModel):
+    id: int
+    name: str
+    displayName: Optional[str] = None
+    aliases: List[str] = Field(default_factory=list)
+    isPrimary: bool
+
+
 class TopicAnalysisArticleContext(BaseModel):
     id: int
     title: str
@@ -244,6 +254,7 @@ class TopicAnalysisArticleContext(BaseModel):
 class TopicAnalysisContextResponse(BaseModel):
     topic: TopicAnalysisTopicContext
     games: List[TopicAnalysisGameContext] = Field(default_factory=list)
+    franchises: List[TopicAnalysisFranchiseContext] = Field(default_factory=list)
     articles: List[TopicAnalysisArticleContext] = Field(default_factory=list)
 
 

@@ -164,6 +164,21 @@ CREATE TABLE IF NOT EXISTS topic_games (
     FOREIGN KEY (game_id) REFERENCES games(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
+
+-- Topic과 프랜차이즈의 N:M 관계: 프랜차이즈 전체 사건 Topic에만 연결
+CREATE TABLE IF NOT EXISTS topic_franchises (
+    id               BIGINT          NOT NULL AUTO_INCREMENT,
+    topic_id         BIGINT          NOT NULL,
+    franchise_id     BIGINT          NOT NULL,
+    is_primary       BOOLEAN         NOT NULL DEFAULT FALSE,
+    relevance_score  DECIMAL(5,4),
+    created_at       DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_topic_franchise (topic_id, franchise_id),
+    FOREIGN KEY (topic_id) REFERENCES topics(id),
+    FOREIGN KEY (franchise_id) REFERENCES franchises(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
 -- 사용자의 관심 게임 (MSA 경계를 넘는 ID이므로 users/games에 DB FK를 걸지 않음)
 CREATE TABLE IF NOT EXISTS user_games (
     id          BIGINT      NOT NULL AUTO_INCREMENT,

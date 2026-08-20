@@ -5,6 +5,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.gamenews.news.entity.Topic;
 import com.gamenews.news.entity.TopicArticle;
 import com.gamenews.news.entity.TopicGame;
+import com.gamenews.news.entity.TopicFranchise;
 import com.gamenews.news.enums.NewsCategory;
 import com.gamenews.news.enums.SourceType;
 import jakarta.validation.constraints.Max;
@@ -63,6 +64,8 @@ public class TopicDto {
         private int engagementBonus;
         private List<Long> gameIds;
         private List<GameSummary> games;
+        private List<Long> franchiseIds;
+        private List<FranchiseSummary> franchises;
         private Integer recencyBonus;
         private OffsetDateTime firstSeenAt;
         private OffsetDateTime lastUpdatedAt;
@@ -82,6 +85,8 @@ public class TopicDto {
                     .engagementBonus(0)
                     .gameIds(List.of())
                     .games(List.of())
+                    .franchiseIds(List.of())
+                    .franchises(List.of())
                     .recencyBonus(0)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))
                     .lastUpdatedAt(toUtc(topic.getLastUpdatedAt()))
@@ -94,6 +99,8 @@ public class TopicDto {
                 Topic topic,
                 List<Long> gameIds,
                 List<GameSummary> games,
+                List<Long> franchiseIds,
+                List<FranchiseSummary> franchises,
                 Integer recencyBonus,
                 Integer importanceScore,
                 long likeCount,
@@ -111,6 +118,8 @@ public class TopicDto {
                     .engagementBonus(engagementBonus)
                     .gameIds(gameIds)
                     .games(games)
+                    .franchiseIds(franchiseIds)
+                    .franchises(franchises)
                     .recencyBonus(recencyBonus)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))
                     .lastUpdatedAt(toUtc(topic.getLastUpdatedAt()))
@@ -156,6 +165,36 @@ public class TopicDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    @JsonIgnoreProperties("primary")
+    public static class FranchiseSummary {
+        private Long id;
+        private String name;
+        private String displayName;
+        private List<String> aliases;
+
+        @JsonProperty("isPrimary")
+        private boolean isPrimary;
+
+        private BigDecimal relevanceScore;
+
+        public static FranchiseSummary from(TopicFranchise topicFranchise) {
+            return FranchiseSummary.builder()
+                    .id(topicFranchise.getFranchise().getId())
+                    .name(topicFranchise.getFranchise().getName())
+                    .displayName(topicFranchise.getFranchise().getDisplayName())
+                    .aliases(topicFranchise.getFranchise().getAliases().stream()
+                            .map(alias -> alias.getAlias())
+                            .toList())
+                    .isPrimary(topicFranchise.isPrimary())
+                    .relevanceScore(topicFranchise.getRelevanceScore())
+                    .build();
+        }
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class ArticleSummary {
         private Long id;
         private String title;
@@ -189,6 +228,7 @@ public class TopicDto {
         private long commentCount;
         private int engagementBonus;
         private List<GameSummary> games;
+        private List<FranchiseSummary> franchises;
         private List<ArticleSummary> articles;
         private OffsetDateTime firstSeenAt;
         private OffsetDateTime lastUpdatedAt;
@@ -198,6 +238,7 @@ public class TopicDto {
         public static TopicDetailResponse from(
                 Topic topic,
                 List<TopicGame> topicGames,
+                List<TopicFranchise> topicFranchises,
                 List<TopicArticle> topicArticles,
                 Integer importanceScore,
                 long likeCount,
@@ -215,6 +256,9 @@ public class TopicDto {
                     .engagementBonus(engagementBonus)
                     .games(topicGames.stream()
                             .map(GameSummary::from)
+                            .toList())
+                    .franchises(topicFranchises.stream()
+                            .map(FranchiseSummary::from)
                             .toList())
                     .articles(topicArticles.stream()
                             .map(ArticleSummary::from)
