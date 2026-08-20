@@ -74,7 +74,24 @@ public class GameAdminService {
                 finalDisplayName,
                 aliasesChanged ? request.getAliases() : currentAliases);
 
-        gameIdentityService.validateAvailable(id, finalName, finalDisplayName, finalAliases);
+        if (newName != null && !newName.equalsIgnoreCase(game.getName())) {
+            gameIdentityService.validateIdentityAvailable(id, newName);
+        }
+        if (displayNameChanged) {
+            String currentDisplayName = game.getDisplayName();
+            boolean changed = (currentDisplayName == null && finalDisplayName != null)
+                    || (currentDisplayName != null && finalDisplayName == null)
+                    || (currentDisplayName != null && finalDisplayName != null
+                    && !currentDisplayName.equalsIgnoreCase(finalDisplayName));
+            if (changed) {
+                gameIdentityService.validateIdentityAvailable(id, finalDisplayName);
+            }
+        }
+        if (aliasesChanged && finalAliases != null) {
+            finalAliases.stream()
+                    .filter(alias -> currentAliases.stream().noneMatch(existing -> existing.equalsIgnoreCase(alias)))
+                    .forEach(alias -> gameIdentityService.validateIdentityAvailable(id, alias));
+        }
 
         game.updateDetails(
                 newName,

@@ -39,7 +39,7 @@ public class Game {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 255)
+    @Column(nullable = false, length = 255)
     private String name;
 
     @Column(name = "display_name", length = 255)
@@ -67,6 +67,12 @@ public class Game {
 
     @Column(name = "igdb_id", unique = true)
     private Long igdbId;
+
+    @Column(name = "igdb_game_type", length = 100)
+    private String igdbGameType;
+
+    @Column(name = "version_parent_igdb_id")
+    private Long versionParentIgdbId;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "metadata_source", length = 30)
@@ -133,6 +139,10 @@ public class Game {
 
     public void confirmReview() {
         this.reviewStatus = GameReviewStatus.CONFIRMED;
+    }
+
+    public void requireReview() {
+        this.reviewStatus = GameReviewStatus.REVIEW_REQUIRED;
     }
 
     public void clearDisplayName() {
@@ -203,6 +213,33 @@ public class Game {
         }
     }
 
+
+    public void applyIgdbSnapshot(
+            Long igdbId,
+            String canonicalName,
+            String developer,
+            String publisher,
+            String genre,
+            String platform,
+            String imageUrl,
+            String igdbGameType,
+            Long versionParentIgdbId,
+            GameEnrichmentStatus status) {
+        this.igdbId = igdbId;
+        this.metadataSource = GameMetadataSource.IGDB;
+        this.enrichmentStatus = status == null ? GameEnrichmentStatus.PARTIAL : status;
+        this.lastEnrichedAt = LocalDateTime.now();
+        if (!isBlank(canonicalName)) this.name = canonicalName.trim();
+        if (!isBlank(developer)) this.developer = developer.trim();
+        if (!isBlank(publisher)) this.publisher = publisher.trim();
+        if (!isBlank(genre)) this.genre = genre.trim();
+        if (!isBlank(platform)) this.platform = platform.trim();
+        if (!isBlank(imageUrl)) this.imageUrl = imageUrl.trim();
+        this.igdbGameType = trimToNullSafe(igdbGameType);
+        this.versionParentIgdbId = versionParentIgdbId;
+        this.reviewStatus = GameReviewStatus.CONFIRMED;
+    }
+
     public void markEnrichmentFailed() {
         this.enrichmentStatus = GameEnrichmentStatus.FAILED;
         this.lastEnrichedAt = LocalDateTime.now();
@@ -213,6 +250,12 @@ public class Game {
     }
 
     private String trimToNull(String value) {
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private String trimToNullSafe(String value) {
+        if (value == null) return null;
         String trimmed = value.trim();
         return trimmed.isEmpty() ? null : trimmed;
     }

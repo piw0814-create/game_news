@@ -11,6 +11,12 @@ export const gameApi = {
     return api.get(`/api/games/${gameId}/franchises`)
   },
 
+  getFranchiseIds(gameIds) {
+    return api.get('/api/games/franchise-ids', {
+      params: { gameIds: gameIds.join(',') }
+    })
+  },
+
   getAdminAll(params = {}) {
     return api.get('/api/admin/games', { params })
   },

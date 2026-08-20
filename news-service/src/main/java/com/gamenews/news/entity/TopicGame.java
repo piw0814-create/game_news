@@ -63,6 +63,14 @@ public class TopicGame {
         this.game = game;
     }
 
+    public void absorbMetadata(boolean primary, BigDecimal relevanceScore) {
+        this.primary = this.primary || primary;
+        if (relevanceScore != null
+                && (this.relevanceScore == null || relevanceScore.compareTo(this.relevanceScore) > 0)) {
+            this.relevanceScore = relevanceScore;
+        }
+    }
+
     public void absorbMetadataFrom(TopicGame other) {
         this.primary = this.primary || other.primary;
         if (other.relevanceScore != null

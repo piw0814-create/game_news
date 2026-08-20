@@ -3,6 +3,8 @@ package com.gamenews.news.entity;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EntityListeners;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
@@ -51,6 +53,11 @@ public class GameFranchise {
     @Column(name = "is_primary", nullable = false)
     private boolean primary;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "relation_source", length = 20)
+    private GameFranchiseSource source = GameFranchiseSource.MANUAL;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -58,8 +65,25 @@ public class GameFranchise {
     public void updatePrimary(boolean primary) {
         this.primary = primary;
     }
+
+    public void markIgdbSource() {
+        if (this.source == null) {
+            this.source = GameFranchiseSource.IGDB;
+        }
+    }
+
+    public void absorbMetadataFrom(GameFranchise other) {
+        this.primary = this.primary || other.primary;
+        if (this.source == null || this.source == GameFranchiseSource.IGDB) {
+            this.source = other.source == null ? this.source : other.source;
+        }
+    }
+
     public void reassignGame(Game game) {
         this.game = game;
     }
 
+    public void reassignFranchise(Franchise franchise) {
+        this.franchise = franchise;
+    }
 }

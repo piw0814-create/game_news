@@ -23,24 +23,46 @@ public class GameIdentityService {
     private final GameRepository gameRepository;
     private final GameAliasRepository gameAliasRepository;
 
+    /**
+     * 이름/표시명/별칭이 정확히 하나의 Game만 가리킬 때만 반환한다.
+     * IGDB는 서로 다른 Game에 같은 name을 허용하므로 복수 후보는 자동 결정하지 않는다.
+     */
     public Optional<Game> findExact(String value) {
+        List<Game> candidates = findExactCandidates(value);
+        return candidates.size() == 1 ? Optional.of(candidates.get(0)) : Optional.empty();
+    }
+
+    public List<Game> findExactCandidates(String value) {
         String normalized = trimToNull(value);
         if (normalized == null) {
-            return Optional.empty();
+            return List.of();
         }
 
-        Optional<Game> byName = gameRepository.findByNameIgnoreCase(normalized);
-        if (byName.isPresent()) {
-            return byName;
-        }
+        Map<Long, Game> unique = new LinkedHashMap<>();
+        gameRepository.findAllByNameIgnoreCase(normalized)
+                .forEach(game -> unique.putIfAbsent(game.getId(), game));
+        gameRepository.findAllByDisplayNameIgnoreCase(normalized)
+                .forEach(game -> unique.putIfAbsent(game.getId(), game));
+        gameAliasRepository.findByAliasIgnoreCase(normalized)
+                .map(GameAlias::getGame)
+                .ifPresent(game -> unique.putIfAbsent(game.getId(), game));
+        return new ArrayList<>(unique.values());
+    }
 
-        Optional<Game> byDisplayName = gameRepository.findByDisplayNameIgnoreCase(normalized);
-        if (byDisplayName.isPresent()) {
-            return byDisplayName;
-        }
+    public boolean isIdentityUsedByAnotherGame(Long currentGameId, String value) {
+        return findExactCandidates(value).stream()
+                .anyMatch(existing -> currentGameId == null || !existing.getId().equals(currentGameId));
+    }
 
-        return gameAliasRepository.findByAliasIgnoreCase(normalized)
-                .map(GameAlias::getGame);
+    public void validateIdentityAvailable(Long currentGameId, String value) {
+        String normalized = trimToNull(value);
+        if (normalized == null) {
+            return;
+        }
+        if (isIdentityUsedByAnotherGame(currentGameId, normalized)) {
+            throw new IllegalArgumentException(
+                    "이미 다른 게임에서 사용 중인 이름 또는 별칭입니다: " + normalized);
+        }
     }
 
     public String normalizeDisplayName(String name, String displayName) {
@@ -73,32 +95,19 @@ public class GameIdentityService {
         return new ArrayList<>(unique.values());
     }
 
+    /**
+     * 수동 생성/수정에서 새로 사용하는 식별자는 계속 유일하게 관리한다.
+     * 동일 canonical name을 가진 서로 다른 IGDB Game만 카탈로그 레벨에서 허용한다.
+     */
     public void validateAvailable(
             Long currentGameId,
             String name,
             String displayName,
             List<String> aliases) {
-        List<String> identities = new ArrayList<>();
-        addIfPresent(identities, name);
-        addIfPresent(identities, displayName);
+        validateIdentityAvailable(currentGameId, name);
+        validateIdentityAvailable(currentGameId, displayName);
         if (aliases != null) {
-            aliases.forEach(alias -> addIfPresent(identities, alias));
-        }
-
-        for (String identity : identities) {
-            findExact(identity)
-                    .filter(existing -> currentGameId == null || !existing.getId().equals(currentGameId))
-                    .ifPresent(existing -> {
-                        throw new IllegalArgumentException(
-                                "이미 다른 게임에서 사용 중인 이름 또는 별칭입니다: " + identity);
-                    });
-        }
-    }
-
-    private void addIfPresent(List<String> values, String value) {
-        String normalized = trimToNull(value);
-        if (normalized != null) {
-            values.add(normalized);
+            aliases.forEach(alias -> validateIdentityAvailable(currentGameId, alias));
         }
     }
 

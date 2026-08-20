@@ -141,6 +141,8 @@ public class GameDto {
         private String platform;
         private String imageUrl;
         private Long igdbId;
+        private String igdbGameType;
+        private Long versionParentIgdbId;
         private GameMetadataSource metadataSource;
         private GameEnrichmentStatus enrichmentStatus;
         private OffsetDateTime lastEnrichedAt;
@@ -163,6 +165,8 @@ public class GameDto {
                     .platform(game.getPlatform())
                     .imageUrl(game.getImageUrl())
                     .igdbId(game.getIgdbId())
+                    .igdbGameType(game.getIgdbGameType())
+                    .versionParentIgdbId(game.getVersionParentIgdbId())
                     .metadataSource(game.getMetadataSource())
                     .enrichmentStatus(game.getEnrichmentStatus() == null
                             ? GameEnrichmentStatus.NOT_ENRICHED

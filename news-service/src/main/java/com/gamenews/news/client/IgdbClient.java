@@ -44,7 +44,10 @@ public class IgdbClient {
             "franchise.id",
             "franchise.name",
             "franchises.id",
-            "franchises.name");
+            "franchises.name",
+            "game_type.id",
+            "game_type.type",
+            "version_parent");
 
     private static final int CONNECT_TIMEOUT_MILLIS = 5_000;
     private static final Duration RESPONSE_TIMEOUT = Duration.ofSeconds(8);
@@ -77,7 +80,6 @@ public class IgdbClient {
         int safeLimit = Math.max(1, Math.min(limit, 10));
         String body = "fields " + GAME_FIELDS + "; "
                 + "search \"" + safeSearch + "\"; "
-                + "where version_parent = null; "
                 + "limit " + safeLimit + ";";
         return requestGames(body, "search query=\"" + safeLogValue(searchTerm) + "\"");
     }
@@ -90,24 +92,77 @@ public class IgdbClient {
                 .orElseThrow(() -> new IllegalArgumentException("IGDB 게임을 찾을 수 없습니다: " + igdbId));
     }
 
+    public List<IgdbGame> getGamesByIds(List<Long> igdbIds) {
+        ensureConfigured();
+        if (igdbIds == null || igdbIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = igdbIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return List.of();
+
+        java.util.ArrayList<IgdbGame> result = new java.util.ArrayList<>();
+        final int chunkSize = 500;
+        for (int from = 0; from < ids.size(); from += chunkSize) {
+            List<Long> chunk = ids.subList(from, Math.min(from + chunkSize, ids.size()));
+            String joined = chunk.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+            String body = "fields " + GAME_FIELDS + "; where id = (" + joined + "); limit " + chunk.size() + ";";
+            result.addAll(requestGames(body, "games batch size=" + chunk.size()));
+        }
+        return List.copyOf(result);
+    }
+
+    public List<IgdbFranchise> searchFranchises(String searchTerm, int limit) {
+        ensureConfigured();
+        String safeSearch = escapeApicalypseString(searchTerm);
+        int safeLimit = Math.max(1, Math.min(limit, 10));
+        String body = "fields id,name,games; search \"" + safeSearch + "\"; limit " + safeLimit + ";";
+        return request(
+                "/franchises",
+                body,
+                new ParameterizedTypeReference<List<IgdbFranchise>>() {},
+                "franchise search query=\"" + safeLogValue(searchTerm) + "\"");
+    }
+
+    public IgdbFranchise getFranchiseById(Long igdbId) {
+        ensureConfigured();
+        String body = "fields id,name,games; where id = " + igdbId + "; limit 1;";
+        return request(
+                "/franchises",
+                body,
+                new ParameterizedTypeReference<List<IgdbFranchise>>() {},
+                "franchise id=" + igdbId).stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException("IGDB 프랜차이즈를 찾을 수 없습니다: " + igdbId));
+    }
+
     private List<IgdbGame> requestGames(String body, String operation) {
+        return request(
+                "/games",
+                body,
+                new ParameterizedTypeReference<List<IgdbGame>>() {},
+                operation);
+    }
+
+    private <T> T request(
+            String path,
+            String body,
+            ParameterizedTypeReference<T> responseType,
+            String operation) {
         long startedAt = System.nanoTime();
         try {
-            List<IgdbGame> result = webClient
+            T result = webClient
                     .post()
-                    .uri(properties.getApiBaseUrl() + "/games")
+                    .uri(properties.getApiBaseUrl() + path)
                     .header("Client-ID", properties.getClientId())
                     .header("Authorization", "Bearer " + getAccessToken())
                     .contentType(MediaType.TEXT_PLAIN)
                     .accept(MediaType.APPLICATION_JSON)
                     .bodyValue(body)
                     .retrieve()
-                    .bodyToMono(new ParameterizedTypeReference<List<IgdbGame>>() {})
+                    .bodyToMono(responseType)
                     .block();
-            List<IgdbGame> safeResult = result == null ? List.of() : result;
-            log.info("[IGDB] Request completed - {}, count={}, {}ms",
-                    operation, safeResult.size(), elapsedMillis(startedAt));
-            return safeResult;
+            log.info("[IGDB] Request completed - {}, {}ms", operation, elapsedMillis(startedAt));
+            return result;
         } catch (WebClientResponseException e) {
             log.warn("[IGDB] Request failed - {}, HTTP {}, {}ms",
                     operation, e.getStatusCode().value(), elapsedMillis(startedAt));
@@ -271,6 +326,29 @@ public class IgdbClient {
         private List<IgdbInvolvedCompany> involvedCompanies;
         private IgdbNamedEntity franchise;
         private List<IgdbNamedEntity> franchises;
+        @JsonProperty("game_type")
+        private IgdbGameType gameType;
+        @JsonProperty("version_parent")
+        private Long versionParent;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class IgdbGameType {
+        private Long id;
+        private String type;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class IgdbFranchise {
+        private Long id;
+        private String name;
+        private List<Long> games;
     }
 
     @Getter

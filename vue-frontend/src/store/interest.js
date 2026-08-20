@@ -37,22 +37,19 @@ export const useInterestStore = defineStore('interest', () => {
       return []
     }
 
-    const results = await Promise.allSettled(
-      uniqueGameIds.map((gameId) => gameApi.getFranchises(gameId))
-    )
+    try {
+      const response = await gameApi.getFranchiseIds(uniqueGameIds)
+      const franchiseIds = unwrap(response)
 
-    const franchiseIds = new Set()
-    for (const result of results) {
-      if (result.status !== 'fulfilled') continue
-      const relations = unwrap(result.value)
-      if (!Array.isArray(relations)) continue
-      relations.forEach((relation) => {
-        if (relation?.franchiseId != null) franchiseIds.add(relation.franchiseId)
-      })
+      interestFranchiseIds.value = Array.isArray(franchiseIds)
+        ? [...new Set(franchiseIds.filter((franchiseId) => franchiseId != null))]
+        : []
+      return interestFranchiseIds.value
+    } catch (err) {
+      console.error('[InterestStore] 관심 프랜차이즈 ID 조회 실패:', err)
+      interestFranchiseIds.value = []
+      return []
     }
-
-    interestFranchiseIds.value = [...franchiseIds]
-    return interestFranchiseIds.value
   }
 
   async function loadGameIds() {

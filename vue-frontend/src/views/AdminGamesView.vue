@@ -553,7 +553,9 @@ function statusClass(status) {
 }
 
 function sourceLabel(source) {
-  return source === 'AI' ? 'AI 등록' : '수동 등록'
+  if (source === 'AI') return 'AI 등록'
+  if (source === 'IGDB') return 'IGDB 등록'
+  return '수동 등록'
 }
 
 function canReclassifyAiRecognition(game) {

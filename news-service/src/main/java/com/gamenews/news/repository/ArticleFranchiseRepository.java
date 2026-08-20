@@ -13,4 +13,8 @@ public interface ArticleFranchiseRepository extends JpaRepository<ArticleFranchi
     Optional<ArticleFranchise> findByArticle_IdAndFranchise_Id(Long articleId, Long franchiseId);
 
     List<ArticleFranchise> findAllByArticle_IdOrderByPrimaryDescCreatedAtAsc(Long articleId);
+
+    List<ArticleFranchise> findAllByFranchise_IdOrderByIdAsc(Long franchiseId);
+
+    long countByFranchise_Id(Long franchiseId);
 }

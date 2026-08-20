@@ -34,7 +34,7 @@ public class TopicDto {
         private Integer importanceScore;
         private long likeCount;
         private long commentCount;
-        private int engagementBonus;
+        private int likeBonus;
         private List<GameSummary> games;
         private List<FranchiseSummary> franchises;
         private Integer recencyBonus;
@@ -53,7 +53,7 @@ public class TopicDto {
                     .importanceScore(topic.getImportanceScore())
                     .likeCount(0)
                     .commentCount(0)
-                    .engagementBonus(0)
+                    .likeBonus(0)
                     .games(List.of())
                     .franchises(List.of())
                     .recencyBonus(0)
@@ -72,7 +72,7 @@ public class TopicDto {
                 Integer importanceScore,
                 long likeCount,
                 long commentCount,
-                int engagementBonus) {
+                int likeBonus) {
             return TopicResponse.builder()
                     .id(topic.getId())
                     .title(topic.getTitle())
@@ -82,7 +82,7 @@ public class TopicDto {
                     .importanceScore(importanceScore)
                     .likeCount(likeCount)
                     .commentCount(commentCount)
-                    .engagementBonus(engagementBonus)
+                    .likeBonus(likeBonus)
                     .games(games)
                     .franchises(franchises)
                     .recencyBonus(recencyBonus)
@@ -191,7 +191,7 @@ public class TopicDto {
         private Integer importanceScore;
         private long likeCount;
         private long commentCount;
-        private int engagementBonus;
+        private int likeBonus;
         private List<GameSummary> games;
         private List<FranchiseSummary> franchises;
         private List<ArticleSummary> articles;
@@ -208,7 +208,7 @@ public class TopicDto {
                 Integer importanceScore,
                 long likeCount,
                 long commentCount,
-                int engagementBonus) {
+                int likeBonus) {
             return TopicDetailResponse.builder()
                     .id(topic.getId())
                     .title(topic.getTitle())
@@ -218,7 +218,7 @@ public class TopicDto {
                     .importanceScore(importanceScore)
                     .likeCount(likeCount)
                     .commentCount(commentCount)
-                    .engagementBonus(engagementBonus)
+                    .likeBonus(likeBonus)
                     .games(topicGames.stream()
                             .map(GameSummary::from)
                             .toList())

@@ -3,6 +3,7 @@ package com.gamenews.news.controller;
 import com.gamenews.news.common.ApiResponse;
 import com.gamenews.news.dto.FranchiseAdminDto;
 import com.gamenews.news.service.FranchiseAdminService;
+import com.gamenews.news.service.FranchiseCatalogSyncService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import java.util.List;
 public class AdminFranchiseController {
 
     private final FranchiseAdminService franchiseAdminService;
+    private final FranchiseCatalogSyncService franchiseCatalogSyncService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<FranchiseAdminDto.SummaryResponse>>> getFranchises(
@@ -49,6 +51,19 @@ public class AdminFranchiseController {
             @PathVariable Long id,
             @Valid @RequestBody FranchiseAdminDto.UpdateRequest request) {
         return ResponseEntity.ok(ApiResponse.success(franchiseAdminService.updateFranchise(id, request)));
+    }
+
+    @PostMapping("/{id}/sync-igdb")
+    public ResponseEntity<ApiResponse<FranchiseAdminDto.SyncResponse>> syncIgdb(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(franchiseCatalogSyncService.sync(id)));
+    }
+
+    @PostMapping("/{id}/merge")
+    public ResponseEntity<ApiResponse<FranchiseAdminDto.DetailResponse>> mergeFranchise(
+            @PathVariable Long id,
+            @Valid @RequestBody FranchiseAdminDto.MergeRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                franchiseAdminService.mergeFranchise(id, request.getTargetFranchiseId())));
     }
 
     @PostMapping("/{id}/games")

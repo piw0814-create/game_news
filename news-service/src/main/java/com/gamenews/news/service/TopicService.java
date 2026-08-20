@@ -28,9 +28,7 @@ import java.util.stream.Collectors;
 @Transactional(readOnly = true)
 public class TopicService {
 
-    private static final int LIKE_BONUS_CAP = 10;
-    private static final int COMMENT_BONUS_CAP = 20;
-    private static final int COMMENT_BONUS_PER_COUNT = 2;
+    private static final int LIKE_BONUS_CAP = 20;
 
     private final TopicRepository topicRepository;
     private final TopicArticleRepository topicArticleRepository;
@@ -84,17 +82,17 @@ public class TopicService {
                 .map(topic -> {
                     long likeCount = likeCountByTopicId.getOrDefault(topic.getId(), 0L);
                     long commentCount = commentCountByTopicId.getOrDefault(topic.getId(), 0L);
-                    int engagementBonus = calculateEngagementBonus(likeCount, commentCount);
+                    int likeBonus = calculateLikeBonus(likeCount);
 
                     return TopicDto.TopicResponse.from(
                             topic,
                             gamesByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             franchisesByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             calculateRecencyBonus(topic.getLastUpdatedAt(), now),
-                            calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
+                            calculateFinalImportance(topic.getImportanceScore(), likeBonus),
                             likeCount,
                             commentCount,
-                            engagementBonus
+                            likeBonus
                     );
                 })
                 .toList();
@@ -111,17 +109,17 @@ public class TopicService {
 
         long likeCount = topicLikeRepository.countByTopic_Id(id);
         long commentCount = topicCommentRepository.countByTopic_Id(id);
-        int engagementBonus = calculateEngagementBonus(likeCount, commentCount);
+        int likeBonus = calculateLikeBonus(likeCount);
 
         return TopicDto.TopicDetailResponse.from(
                 topic,
                 topicGames,
                 topicFranchises,
                 topicArticles,
-                calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
+                calculateFinalImportance(topic.getImportanceScore(), likeBonus),
                 likeCount,
                 commentCount,
-                engagementBonus
+                likeBonus
         );
     }
 
@@ -149,20 +147,15 @@ public class TopicService {
         return 0;
     }
 
-    private int calculateEngagementBonus(long likeCount, long commentCount) {
-        int likeBonus = (int) Math.min(LIKE_BONUS_CAP, Math.max(0, likeCount));
-        int commentBonus = (int) Math.min(
-                COMMENT_BONUS_CAP,
-                Math.max(0, commentCount) * COMMENT_BONUS_PER_COUNT
-        );
-        return likeBonus + commentBonus;
+    private int calculateLikeBonus(long likeCount) {
+        return (int) Math.min(LIKE_BONUS_CAP, Math.max(0, likeCount));
     }
 
-    private Integer calculateFinalImportance(Integer baseImportanceScore, int engagementBonus) {
+    private Integer calculateFinalImportance(Integer baseImportanceScore, int likeBonus) {
         if (baseImportanceScore == null) {
             return null;
         }
-        return Math.max(0, Math.min(100, baseImportanceScore + engagementBonus));
+        return Math.max(0, Math.min(100, baseImportanceScore + likeBonus));
     }
 
 }

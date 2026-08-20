@@ -1,18 +1,25 @@
 package com.gamenews.news.service;
 
 import com.gamenews.news.dto.FranchiseAdminDto;
+import com.gamenews.news.entity.ArticleFranchise;
 import com.gamenews.news.entity.Franchise;
 import com.gamenews.news.entity.FranchiseAlias;
 import com.gamenews.news.entity.FranchiseMetadataSource;
 import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.GameFranchise;
+import com.gamenews.news.entity.GameFranchiseSource;
+import com.gamenews.news.entity.TopicFranchise;
+import com.gamenews.news.repository.ArticleFranchiseRepository;
 import com.gamenews.news.repository.FranchiseRepository;
 import com.gamenews.news.repository.GameFranchiseRepository;
 import com.gamenews.news.repository.GameRepository;
+import com.gamenews.news.repository.TopicFranchiseRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -27,6 +34,9 @@ public class FranchiseAdminService {
     private final FranchiseRepository franchiseRepository;
     private final GameFranchiseRepository gameFranchiseRepository;
     private final GameRepository gameRepository;
+    private final ArticleFranchiseRepository articleFranchiseRepository;
+    private final TopicFranchiseRepository topicFranchiseRepository;
+    private final GameSimilarityService similarityService;
 
     public List<FranchiseAdminDto.SummaryResponse> getFranchises(String search) {
         String keyword = normalizeSearch(search);
@@ -34,13 +44,14 @@ public class FranchiseAdminService {
                 .filter(franchise -> keyword == null || searchableText(franchise).contains(keyword))
                 .map(franchise -> FranchiseAdminDto.SummaryResponse.from(
                         franchise,
-                        Math.toIntExact(gameFranchiseRepository.countByFranchise_Id(franchise.getId()))))
+                        Math.toIntExact(gameFranchiseRepository.countByFranchise_Id(franchise.getId())),
+                        Math.toIntExact(articleFranchiseRepository.countByFranchise_Id(franchise.getId())),
+                        Math.toIntExact(topicFranchiseRepository.countByFranchise_Id(franchise.getId()))))
                 .toList();
     }
 
     public FranchiseAdminDto.DetailResponse getFranchise(Long franchiseId) {
-        Franchise franchise = findFranchise(franchiseId);
-        return toDetail(franchise);
+        return toDetail(findFranchise(franchiseId));
     }
 
     @Transactional
@@ -80,9 +91,7 @@ public class FranchiseAdminService {
 
         validateIdentityAvailable(franchiseId, name, displayName, aliases);
         franchise.updateIdentity(name, displayName == null ? "" : displayName);
-        if (displayChanged && displayName == null) {
-            franchise.clearDisplayName();
-        }
+        if (displayChanged && displayName == null) franchise.clearDisplayName();
         franchise.replaceAliases(aliases);
         return toDetail(franchise);
     }
@@ -99,6 +108,7 @@ public class FranchiseAdminService {
                         .game(game)
                         .franchise(franchise)
                         .primary(false)
+                        .source(GameFranchiseSource.MANUAL)
                         .build());
 
         applyPrimary(game.getId(), link, request.isPrimary());
@@ -128,6 +138,75 @@ public class FranchiseAdminService {
         return toDetail(franchise);
     }
 
+    @Transactional
+    public FranchiseAdminDto.DetailResponse mergeFranchise(Long sourceId, Long targetId) {
+        if (sourceId.equals(targetId)) throw new IllegalArgumentException("같은 프랜차이즈로 병합할 수 없습니다");
+        Franchise source = findFranchise(sourceId);
+        Franchise target = findFranchise(targetId);
+
+        if (source.getIgdbId() != null && target.getIgdbId() != null
+                && !source.getIgdbId().equals(target.getIgdbId())) {
+            throw new IllegalArgumentException("서로 다른 IGDB ID가 연결된 프랜차이즈는 병합할 수 없습니다");
+        }
+
+        List<String> sourceIdentities = new ArrayList<>();
+        sourceIdentities.add(source.getName());
+        sourceIdentities.add(source.getDisplayName());
+        source.getAliases().forEach(alias -> sourceIdentities.add(alias.getAlias()));
+        Long inheritedIgdbId = target.getIgdbId() == null ? source.getIgdbId() : null;
+        String inheritedIgdbName = inheritedIgdbId == null ? null : source.getName();
+
+        mergeGameLinks(source, target);
+        mergeArticleLinks(source, target);
+        mergeTopicLinks(source, target);
+
+        source.clearAliases();
+        franchiseRepository.flush();
+        franchiseRepository.delete(source);
+        franchiseRepository.flush();
+
+        if (inheritedIgdbId != null) target.applyIgdbIdentity(inheritedIgdbId, inheritedIgdbName);
+        for (String identity : sourceIdentities) {
+            String alias = normalizeOptional(identity);
+            if (alias == null || identityUsedByOther(target.getId(), alias)) continue;
+            target.addAlias(alias);
+        }
+        franchiseRepository.save(target);
+        return toDetail(target);
+    }
+
+    private void mergeGameLinks(Franchise source, Franchise target) {
+        for (GameFranchise sourceLink : gameFranchiseRepository
+                .findAllByFranchise_IdOrderByPrimaryDescCreatedAtAsc(source.getId())) {
+            gameFranchiseRepository.findByGame_IdAndFranchise_Id(sourceLink.getGame().getId(), target.getId())
+                    .ifPresentOrElse(targetLink -> {
+                        targetLink.absorbMetadataFrom(sourceLink);
+                        gameFranchiseRepository.delete(sourceLink);
+                    }, () -> sourceLink.reassignFranchise(target));
+        }
+    }
+
+    private void mergeArticleLinks(Franchise source, Franchise target) {
+        for (ArticleFranchise sourceLink : articleFranchiseRepository.findAllByFranchise_IdOrderByIdAsc(source.getId())) {
+            articleFranchiseRepository.findByArticle_IdAndFranchise_Id(sourceLink.getArticle().getId(), target.getId())
+                    .ifPresentOrElse(targetLink -> {
+                        targetLink.absorbMetadata(
+                                sourceLink.isPrimary(), sourceLink.getConfidenceScore(), sourceLink.getRelevanceReason());
+                        articleFranchiseRepository.delete(sourceLink);
+                    }, () -> sourceLink.reassignFranchise(target));
+        }
+    }
+
+    private void mergeTopicLinks(Franchise source, Franchise target) {
+        for (TopicFranchise sourceLink : topicFranchiseRepository.findAllByFranchise_IdOrderByIdAsc(source.getId())) {
+            topicFranchiseRepository.findByTopic_IdAndFranchise_Id(sourceLink.getTopic().getId(), target.getId())
+                    .ifPresentOrElse(targetLink -> {
+                        targetLink.absorbMetadata(sourceLink.isPrimary(), sourceLink.getRelevanceScore());
+                        topicFranchiseRepository.delete(sourceLink);
+                    }, () -> sourceLink.reassignFranchise(target));
+        }
+    }
+
     private void applyPrimary(Long gameId, GameFranchise link, boolean primary) {
         if (primary) {
             gameFranchiseRepository.findAllByGame_IdOrderByPrimaryDescCreatedAtAsc(gameId)
@@ -137,25 +216,46 @@ public class FranchiseAdminService {
     }
 
     private FranchiseAdminDto.DetailResponse toDetail(Franchise franchise) {
-        List<GameFranchise> links = gameFranchiseRepository
+        List<GameFranchise> gameLinks = gameFranchiseRepository
                 .findAllByFranchise_IdOrderByPrimaryDescCreatedAtAsc(franchise.getId());
-        return FranchiseAdminDto.DetailResponse.from(franchise, links);
+        List<ArticleFranchise> articleLinks = articleFranchiseRepository
+                .findAllByFranchise_IdOrderByIdAsc(franchise.getId());
+        List<TopicFranchise> topicLinks = topicFranchiseRepository
+                .findAllByFranchise_IdOrderByIdAsc(franchise.getId());
+        return FranchiseAdminDto.DetailResponse.from(
+                franchise, gameLinks, articleLinks, topicLinks, similarFranchises(franchise));
     }
 
-    private void validateIdentityAvailable(
-            Long excludeId,
-            String name,
-            String displayName,
-            List<String> aliases) {
+    private List<FranchiseAdminDto.SimilarFranchiseResponse> similarFranchises(Franchise franchise) {
+        List<String> current = identities(franchise);
+        return franchiseRepository.findAll().stream()
+                .filter(candidate -> !candidate.getId().equals(franchise.getId()))
+                .map(candidate -> {
+                    GameSimilarityService.SimilarityResult result = similarityService.compare(
+                            current, identities(candidate), null, null, null, null);
+                    return FranchiseAdminDto.SimilarFranchiseResponse.builder()
+                            .id(candidate.getId())
+                            .name(candidate.getName())
+                            .displayName(candidate.getDisplayName())
+                            .igdbId(candidate.getIgdbId())
+                            .similarityScore(BigDecimal.valueOf(result.score()).setScale(4, RoundingMode.HALF_UP))
+                            .reasons(result.reasons())
+                            .build();
+                })
+                .filter(candidate -> candidate.getSimilarityScore().compareTo(new BigDecimal("0.5500")) >= 0)
+                .sorted((a, b) -> b.getSimilarityScore().compareTo(a.getSimilarityScore()))
+                .limit(5)
+                .toList();
+    }
+
+    private void validateIdentityAvailable(Long excludeId, String name, String displayName, List<String> aliases) {
         Set<String> desired = new LinkedHashSet<>();
         desired.add(identityKey(name));
         if (displayName != null) desired.add(identityKey(displayName));
         aliases.forEach(alias -> desired.add(identityKey(alias)));
 
         for (Franchise candidate : franchiseRepository.findAll()) {
-            if (excludeId != null && candidate.getId().equals(excludeId)) {
-                continue;
-            }
+            if (excludeId != null && candidate.getId().equals(excludeId)) continue;
             for (String identity : identities(candidate)) {
                 if (desired.contains(identityKey(identity))) {
                     throw new IllegalArgumentException(
@@ -163,6 +263,15 @@ public class FranchiseAdminService {
                 }
             }
         }
+    }
+
+    private boolean identityUsedByOther(Long excludeId, String value) {
+        String key = identityKey(value);
+        return franchiseRepository.findAll().stream()
+                .filter(candidate -> !candidate.getId().equals(excludeId))
+                .flatMap(candidate -> identities(candidate).stream())
+                .map(this::identityKey)
+                .anyMatch(key::equals);
     }
 
     private List<String> identities(Franchise franchise) {
@@ -203,9 +312,7 @@ public class FranchiseAdminService {
 
     private String normalizeRequiredName(String value) {
         String normalized = normalizeOptional(value);
-        if (normalized == null) {
-            throw new IllegalArgumentException("프랜차이즈 이름은 비워둘 수 없습니다");
-        }
+        if (normalized == null) throw new IllegalArgumentException("프랜차이즈 이름은 비워둘 수 없습니다");
         return normalized;
     }
 

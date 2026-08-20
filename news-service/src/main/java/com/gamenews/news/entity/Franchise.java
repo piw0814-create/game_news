@@ -56,6 +56,9 @@ public class Franchise {
     @Column(name = "metadata_source", length = 30)
     private FranchiseMetadataSource metadataSource;
 
+    @Column(name = "last_synced_at")
+    private LocalDateTime lastSyncedAt;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -96,8 +99,21 @@ public class Franchise {
             this.metadataSource = FranchiseMetadataSource.IGDB;
         }
         if (name != null && !name.isBlank()) {
-            this.name = name.trim();
+            String nextName = name.trim();
+            String previousName = this.name;
+            this.name = nextName;
+            if (previousName != null && !previousName.equalsIgnoreCase(nextName)) {
+                addAlias(previousName);
+            }
         }
+    }
+
+    public void clearAliases() {
+        this.aliases.clear();
+    }
+
+    public void markCatalogSynced() {
+        this.lastSyncedAt = LocalDateTime.now();
     }
 
     public void addAlias(String alias) {

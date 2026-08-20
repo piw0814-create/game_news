@@ -9,11 +9,9 @@ import java.util.Optional;
 
 public interface GameRepository extends JpaRepository<Game, Long> {
 
-    boolean existsByNameIgnoreCase(String name);
+    List<Game> findAllByNameIgnoreCase(String name);
 
-    Optional<Game> findByNameIgnoreCase(String name);
-
-    Optional<Game> findByDisplayNameIgnoreCase(String displayName);
+    List<Game> findAllByDisplayNameIgnoreCase(String displayName);
 
     Optional<Game> findByIgdbId(Long igdbId);
 

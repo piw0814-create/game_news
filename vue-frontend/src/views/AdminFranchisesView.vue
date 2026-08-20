@@ -5,9 +5,9 @@
     <main class="admin-main">
       <section class="page-heading">
         <div>
-          <p class="eyebrow">ADMIN · FRANCHISE DATA</p>
-          <h1>프랜차이즈 관리</h1>
-          <p>IP 기준 정보를 등록하고 게임 소속 관계를 관리합니다.</p>
+          <p class="eyebrow">ADMIN · FRANCHISE REVIEW</p>
+          <h1>프랜차이즈 검토</h1>
+          <p>IGDB 기준 정보와 연결된 게임·기사·Topic을 한 화면에서 확인하고 동기화합니다.</p>
         </div>
         <button type="button" class="refresh-button" :disabled="loading" @click="loadAll">
           {{ loading ? '불러오는 중' : '새로고침' }}
@@ -24,7 +24,7 @@
       <section class="create-panel">
         <div class="section-heading compact">
           <h2>신규 등록</h2>
-          <span>AI는 프랜차이즈를 자동 생성하지 않습니다.</span>
+          <span>수동 등록 후 Game의 IGDB 적용 또는 병합으로 공식 정보를 연결할 수 있습니다.</span>
         </div>
         <form class="create-form" @submit.prevent="createFranchise">
           <label class="field">
@@ -37,7 +37,7 @@
           </label>
           <label class="field full">
             <span>별칭</span>
-            <input v-model="createForm.aliasesText" placeholder="쉼표로 구분 (예: GOW, God of War Series)" />
+            <input v-model="createForm.aliasesText" placeholder="쉼표로 구분" />
           </label>
           <div class="create-actions">
             <button type="submit" class="primary-button" :disabled="saving">
@@ -67,14 +67,15 @@
             </div>
             <p v-if="franchise.displayName" class="canonical">{{ franchise.name }}</p>
             <p class="meta">
-              소속 게임 {{ franchise.gameCount || 0 }}개
+              게임 {{ franchise.gameCount || 0 }} · 기사 {{ franchise.articleCount || 0 }} · Topic {{ franchise.topicCount || 0 }}
               <template v-if="franchise.igdbId"> · IGDB #{{ franchise.igdbId }}</template>
             </p>
+            <p v-if="franchise.lastSyncedAt" class="meta">최근 IGDB 동기화 {{ formatDate(franchise.lastSyncedAt) }}</p>
             <p v-if="franchise.aliases?.length" class="aliases">{{ franchise.aliases.join(' · ') }}</p>
           </div>
           <div class="row-actions">
+            <button type="button" class="text-button" @click="toggleReview(franchise)">검토</button>
             <button type="button" class="text-button" @click="toggleEdit(franchise)">수정</button>
-            <button type="button" class="text-button" @click="toggleGames(franchise)">게임 연결</button>
           </div>
 
           <form v-if="editingId === franchise.id" class="inline-panel" @submit.prevent="saveEdit(franchise)">
@@ -90,55 +91,114 @@
             </div>
           </form>
 
-          <div v-if="managingId === franchise.id" class="inline-panel">
-            <div class="panel-heading"><strong>Game ↔ Franchise</strong><button type="button" @click="closePanels">닫기</button></div>
-            <div v-if="detailLoadingId === franchise.id" class="empty">연결 정보를 불러오는 중...</div>
+          <div v-if="reviewingId === franchise.id" class="inline-panel review-panel">
+            <div class="panel-heading">
+              <strong>프랜차이즈 검토</strong>
+              <button type="button" @click="closePanels">닫기</button>
+            </div>
+            <div v-if="detailLoadingId === franchise.id" class="empty">검토 정보를 불러오는 중...</div>
             <template v-else-if="detailFor(franchise.id)">
-              <div class="linked-games">
-                <div v-for="link in detailFor(franchise.id).games" :key="link.gameId" class="game-link-row">
-                  <span>
-                    <strong>{{ link.gameDisplayName || link.gameName }}</strong>
-                    <small v-if="link.gameDisplayName">{{ link.gameName }}</small>
-                  </span>
-                  <div class="link-actions">
-                    <button
-                      type="button"
-                      class="mini-button"
-                      :class="{ active: link.isPrimary }"
-                      @click="setPrimary(franchise, link, !link.isPrimary)"
-                    >
-                      {{ link.isPrimary ? '대표' : '대표 지정' }}
-                    </button>
-                    <button type="button" class="mini-button danger" @click="unlinkGame(franchise, link)">연결 해제</button>
-                  </div>
-                </div>
-                <p v-if="!detailFor(franchise.id).games?.length" class="empty">연결된 게임이 없습니다.</p>
+              <div class="review-overview">
+                <div><small>메타데이터</small><strong>{{ sourceLabel(detailFor(franchise.id).metadataSource) }}</strong></div>
+                <div><small>IGDB</small><strong>{{ detailFor(franchise.id).igdbId ? `#${detailFor(franchise.id).igdbId}` : '미연결' }}</strong></div>
+                <div><small>소속 게임</small><strong>{{ detailFor(franchise.id).games?.length || 0 }}</strong></div>
+                <div><small>관련 기사</small><strong>{{ detailFor(franchise.id).articles?.length || 0 }}</strong></div>
+                <div><small>관련 Topic</small><strong>{{ detailFor(franchise.id).topics?.length || 0 }}</strong></div>
               </div>
 
-              <label class="game-search">
-                <span>게임 추가</span>
-                <input v-model.trim="gameSearch" type="search" placeholder="게임명 · 별칭 검색" />
-              </label>
-              <div v-if="gameSearch" class="game-search-results">
+              <div class="sync-row">
+                <div>
+                  <strong>IGDB 카탈로그</strong>
+                  <p>IGDB Franchise의 games 목록을 기준으로 Game과 GameFranchise를 최신화합니다.</p>
+                </div>
                 <button
-                  v-for="game in gameCandidates(franchise.id)"
-                  :key="game.id"
                   type="button"
-                  class="candidate-button"
-                  @click="linkGame(franchise, game)"
+                  class="primary-button"
+                  :disabled="syncingId === franchise.id"
+                  @click="syncIgdb(franchise)"
                 >
-                  <span><strong>{{ game.displayName || game.name }}</strong><small>{{ game.publisher || '퍼블리셔 정보 없음' }}</small></span>
-                  <em>#{{ game.id }}</em>
+                  {{ syncingId === franchise.id ? '동기화 중...' : (detailFor(franchise.id).igdbId ? 'IGDB 동기화' : 'IGDB 연결 · 동기화') }}
                 </button>
-                <p v-if="!gameCandidates(franchise.id).length" class="empty">추가할 게임이 없습니다.</p>
               </div>
+
+              <section class="review-section">
+                <div class="review-title"><strong>소속 게임</strong><span>{{ detailFor(franchise.id).games?.length || 0 }}개</span></div>
+                <div class="linked-games">
+                  <div v-for="link in detailFor(franchise.id).games" :key="link.gameId" class="game-link-row">
+                    <span>
+                      <strong>{{ link.gameDisplayName || link.gameName }}</strong>
+                      <small>
+                        #{{ link.gameId }}
+                        <template v-if="link.gameIgdbId"> · IGDB #{{ link.gameIgdbId }}</template>
+                        <template v-if="link.igdbGameType"> · {{ link.igdbGameType }}</template>
+                        · {{ relationSourceLabel(link.relationSource) }}
+                      </small>
+                    </span>
+                    <div class="link-actions">
+                      <button type="button" class="mini-button" :class="{ active: link.isPrimary }" @click="setPrimary(franchise, link, !link.isPrimary)">
+                        {{ link.isPrimary ? '대표' : '대표 지정' }}
+                      </button>
+                      <button type="button" class="mini-button danger" @click="unlinkGame(franchise, link)">연결 해제</button>
+                    </div>
+                  </div>
+                  <p v-if="!detailFor(franchise.id).games?.length" class="empty">연결된 게임이 없습니다.</p>
+                </div>
+
+                <label class="game-search">
+                  <span>수동 게임 추가</span>
+                  <input v-model.trim="gameSearch" type="search" placeholder="게임명 · 별칭 검색" />
+                </label>
+                <div v-if="gameSearch" class="game-search-results">
+                  <button v-for="game in gameCandidates(franchise.id)" :key="game.id" type="button" class="candidate-button" @click="linkGame(franchise, game)">
+                    <span><strong>{{ game.displayName || game.name }}</strong><small>{{ game.publisher || '퍼블리셔 정보 없음' }}</small></span>
+                    <em>#{{ game.id }}</em>
+                  </button>
+                  <p v-if="!gameCandidates(franchise.id).length" class="empty">추가할 게임이 없습니다.</p>
+                </div>
+              </section>
+
+              <section class="review-section">
+                <div class="review-title"><strong>관련 기사</strong><span>{{ detailFor(franchise.id).articles?.length || 0 }}개</span></div>
+                <div class="compact-list">
+                  <div v-for="article in detailFor(franchise.id).articles" :key="article.articleId" class="compact-row">
+                    <span><strong>{{ article.title }}</strong><small>{{ article.sourceName || '출처 없음' }} · confidence {{ article.confidenceScore ?? '-' }}</small></span>
+                    <em v-if="article.isPrimary">PRIMARY</em>
+                  </div>
+                  <p v-if="!detailFor(franchise.id).articles?.length" class="empty">직접 연결된 기사가 없습니다.</p>
+                </div>
+              </section>
+
+              <section class="review-section">
+                <div class="review-title"><strong>관련 Topic</strong><span>{{ detailFor(franchise.id).topics?.length || 0 }}개</span></div>
+                <div class="compact-list">
+                  <RouterLink v-for="topic in detailFor(franchise.id).topics" :key="topic.topicId" :to="`/topics/${topic.topicId}`" class="compact-row link-row">
+                    <span><strong>{{ topic.title }}</strong><small>중요도 {{ topic.importanceScore ?? '-' }} · relevance {{ topic.relevanceScore ?? '-' }}</small></span>
+                    <em v-if="topic.isPrimary">PRIMARY</em>
+                  </RouterLink>
+                  <p v-if="!detailFor(franchise.id).topics?.length" class="empty">직접 연결된 Topic이 없습니다.</p>
+                </div>
+              </section>
+
+              <section class="review-section">
+                <div class="review-title"><strong>유사 프랜차이즈</strong><span>중복 검토</span></div>
+                <div class="compact-list">
+                  <div v-for="candidate in detailFor(franchise.id).similarFranchises" :key="candidate.id" class="compact-row">
+                    <span>
+                      <strong>{{ candidate.displayName || candidate.name }}</strong>
+                      <small>#{{ candidate.id }} · 유사도 {{ candidate.similarityScore }}<template v-if="candidate.igdbId"> · IGDB #{{ candidate.igdbId }}</template></small>
+                    </span>
+                    <button type="button" class="mini-button danger" @click="mergeInto(franchise, candidate)">이쪽으로 병합</button>
+                  </div>
+                  <p v-if="!detailFor(franchise.id).similarFranchises?.length" class="empty">뚜렷한 중복 후보가 없습니다.</p>
+                </div>
+              </section>
             </template>
           </div>
         </article>
 
         <div v-if="!loading && !filteredFranchises.length" class="empty-state">
           <strong>프랜차이즈가 없습니다.</strong>
-          <p>위에서 직접 등록하거나 IGDB 메타데이터 적용으로 생성할 수 있습니다.</p>
+          <p>직접 등록하거나 IGDB 게임 메타데이터 적용으로 생성할 수 있습니다.</p>
         </div>
       </section>
     </main>
@@ -161,11 +221,11 @@ const error = ref('')
 const notice = ref('')
 const searchKeyword = ref('')
 const editingId = ref(null)
-const managingId = ref(null)
+const reviewingId = ref(null)
 const detailLoadingId = ref(null)
+const syncingId = ref(null)
 const details = reactive({})
 const gameSearch = ref('')
-
 const createForm = reactive({ name: '', displayName: '', aliasesText: '' })
 const editForm = reactive({ name: '', displayName: '', aliasesText: '' })
 
@@ -179,6 +239,8 @@ const filteredFranchises = computed(() => {
 function extractData(response) { return response?.data?.data ?? response?.data }
 function errorMessage(err, fallback) { return err?.response?.data?.message || err?.message || fallback }
 function sourceLabel(source) { return source === 'IGDB' ? 'IGDB' : '수동 등록' }
+function relationSourceLabel(source) { return source === 'IGDB' ? 'IGDB 관계' : source === 'MANUAL' ? '수동 관계' : '기존 관계' }
+function formatDate(value) { return value ? new Date(value).toLocaleString('ko-KR') : '-' }
 function parseAliases(value) {
   const seen = new Set()
   return String(value || '').split(',').map((item) => item.trim()).filter((item) => {
@@ -190,48 +252,36 @@ function parseAliases(value) {
   })
 }
 function detailFor(id) { return details[id] || null }
-function closePanels() { editingId.value = null; managingId.value = null; gameSearch.value = '' }
+function closePanels() { editingId.value = null; reviewingId.value = null; gameSearch.value = '' }
 
 async function loadAll() {
-  loading.value = true
-  error.value = ''
+  loading.value = true; error.value = ''
   try {
-    const [franchiseResponse, gameResponse] = await Promise.all([
-      franchiseApi.getAdminAll(),
-      gameApi.getAdminAll()
-    ])
+    const [franchiseResponse, gameResponse] = await Promise.all([franchiseApi.getAdminAll(), gameApi.getAdminAll()])
     franchises.value = Array.isArray(extractData(franchiseResponse)) ? extractData(franchiseResponse) : []
     games.value = Array.isArray(extractData(gameResponse)) ? extractData(gameResponse) : []
-  } catch (err) {
-    error.value = errorMessage(err, '프랜차이즈 정보를 불러오지 못했습니다.')
-  } finally {
-    loading.value = false
-  }
+  } catch (err) { error.value = errorMessage(err, '프랜차이즈 정보를 불러오지 못했습니다.') }
+  finally { loading.value = false }
 }
 
 async function createFranchise() {
-  saving.value = true
-  error.value = ''
+  saving.value = true; error.value = ''
   try {
-    const response = await franchiseApi.createAdmin({
+    const created = extractData(await franchiseApi.createAdmin({
       name: createForm.name,
       displayName: createForm.displayName,
       aliases: parseAliases(createForm.aliasesText)
-    })
-    const created = extractData(response)
+    }))
     notice.value = `${created.displayName || created.name} 프랜차이즈를 등록했습니다.`
     createForm.name = ''; createForm.displayName = ''; createForm.aliasesText = ''
     await loadAll()
-  } catch (err) {
-    error.value = errorMessage(err, '프랜차이즈를 등록하지 못했습니다.')
-  } finally {
-    saving.value = false
-  }
+  } catch (err) { error.value = errorMessage(err, '프랜차이즈를 등록하지 못했습니다.') }
+  finally { saving.value = false }
 }
 
 function toggleEdit(franchise) {
   if (editingId.value === franchise.id) return closePanels()
-  editingId.value = franchise.id; managingId.value = null
+  editingId.value = franchise.id; reviewingId.value = null
   editForm.name = franchise.name || ''
   editForm.displayName = franchise.displayName || ''
   editForm.aliasesText = (franchise.aliases || []).join(', ')
@@ -247,22 +297,31 @@ async function saveEdit(franchise) {
     })
     notice.value = '프랜차이즈 정보를 수정했습니다.'
     closePanels(); await loadAll()
-  } catch (err) {
-    error.value = errorMessage(err, '프랜차이즈 정보를 수정하지 못했습니다.')
-  } finally { saving.value = false }
+  } catch (err) { error.value = errorMessage(err, '프랜차이즈 정보를 수정하지 못했습니다.') }
+  finally { saving.value = false }
 }
 
-async function toggleGames(franchise) {
-  if (managingId.value === franchise.id) return closePanels()
-  managingId.value = franchise.id; editingId.value = null; gameSearch.value = ''
+async function toggleReview(franchise) {
+  if (reviewingId.value === franchise.id) return closePanels()
+  reviewingId.value = franchise.id; editingId.value = null; gameSearch.value = ''
   await refreshDetail(franchise.id)
 }
 
 async function refreshDetail(id) {
   detailLoadingId.value = id
   try { details[id] = extractData(await franchiseApi.getAdminById(id)) }
-  catch (err) { error.value = errorMessage(err, '게임 연결 정보를 불러오지 못했습니다.') }
+  catch (err) { error.value = errorMessage(err, '프랜차이즈 검토 정보를 불러오지 못했습니다.') }
   finally { detailLoadingId.value = null }
+}
+
+async function syncIgdb(franchise) {
+  syncingId.value = franchise.id; error.value = ''
+  try {
+    const result = extractData(await franchiseApi.syncIgdb(franchise.id))
+    notice.value = `IGDB 동기화 완료 · 전체 ${result.igdbGameCount} · 신규 ${result.createdGameCount} · 갱신 ${result.updatedGameCount} · 제외 ${result.skippedGameCount}`
+    await loadAll(); reviewingId.value = franchise.id; await refreshDetail(franchise.id)
+  } catch (err) { error.value = errorMessage(err, 'IGDB 프랜차이즈 동기화에 실패했습니다.') }
+  finally { syncingId.value = null }
 }
 
 function gameCandidates(franchiseId) {
@@ -278,8 +337,8 @@ function gameCandidates(franchiseId) {
 async function linkGame(franchise, game) {
   try {
     details[franchise.id] = extractData(await franchiseApi.linkGame(franchise.id, game.id, false))
-    notice.value = `${game.displayName || game.name}을(를) ${franchise.displayName || franchise.name}에 연결했습니다.`
-    await loadAll(); managingId.value = franchise.id
+    notice.value = `${game.displayName || game.name}을(를) 연결했습니다.`
+    await loadAll(); reviewingId.value = franchise.id
   } catch (err) { error.value = errorMessage(err, '게임을 연결하지 못했습니다.') }
 }
 
@@ -295,8 +354,18 @@ async function unlinkGame(franchise, link) {
   try {
     details[franchise.id] = extractData(await franchiseApi.unlinkGame(franchise.id, link.gameId))
     notice.value = '게임 연결을 해제했습니다.'
-    await loadAll(); managingId.value = franchise.id
+    await loadAll(); reviewingId.value = franchise.id
   } catch (err) { error.value = errorMessage(err, '게임 연결을 해제하지 못했습니다.') }
+}
+
+async function mergeInto(source, target) {
+  const targetName = target.displayName || target.name
+  if (!window.confirm(`${source.displayName || source.name}을(를) ${targetName}(으)로 병합하시겠습니까?`)) return
+  try {
+    await franchiseApi.mergeAdmin(source.id, target.id)
+    notice.value = `${targetName}(으)로 병합했습니다.`
+    closePanels(); await loadAll()
+  } catch (err) { error.value = errorMessage(err, '프랜차이즈를 병합하지 못했습니다.') }
 }
 
 onMounted(async () => {
@@ -347,12 +416,24 @@ onMounted(async () => {
 .panel-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 18px; }
 .primary-button, .secondary-button, .mini-button { padding: 8px 12px; font-size: 11px; font-weight: 700; }
 .primary-button { border: 1px solid #25292f; background: #25292f; color: #fff; }
+.primary-button:disabled { opacity: .45; }
 .secondary-button, .mini-button { border: 1px solid #d3d7dc; background: #fff; color: #69717b; }
-.linked-games, .game-search-results { width: min(720px, 100%); border-top: 1px solid #eceef1; }
-.game-link-row, .candidate-button { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 2px; border-bottom: 1px solid #eceef1; background: #fff; text-align: left; }
-.game-link-row span, .candidate-button span { display: grid; gap: 2px; }
-.game-link-row strong, .candidate-button strong { font-size: 11px; }
-.game-link-row small, .candidate-button small, .candidate-button em { color: #8b929b; font-size: 10px; font-style: normal; }
+.review-overview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 1px; border: 1px solid #e2e5e9; background: #e2e5e9; }
+.review-overview div { display: grid; gap: 5px; padding: 12px; background: #fff; }
+.review-overview small { color: #8b929b; font-size: 9px; }
+.review-overview strong { font-size: 12px; }
+.sync-row { display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 18px 0; border-bottom: 1px solid #e8eaed; }
+.sync-row strong { font-size: 12px; }
+.sync-row p { margin: 4px 0 0; color: #858c95; font-size: 10px; }
+.review-section { padding: 20px 0 4px; border-bottom: 1px solid #eceef1; }
+.review-title { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
+.review-title strong { font-size: 12px; }
+.review-title span { color: #8b929b; font-size: 9px; }
+.linked-games, .game-search-results, .compact-list { width: 100%; border-top: 1px solid #eceef1; }
+.game-link-row, .candidate-button, .compact-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 10px 2px; border-bottom: 1px solid #eceef1; background: #fff; text-align: left; color: inherit; text-decoration: none; }
+.game-link-row span, .candidate-button span, .compact-row span { display: grid; gap: 2px; }
+.game-link-row strong, .candidate-button strong, .compact-row strong { font-size: 11px; }
+.game-link-row small, .candidate-button small, .candidate-button em, .compact-row small, .compact-row em { color: #8b929b; font-size: 10px; font-style: normal; }
 .link-actions { display: flex; gap: 8px; }
 .mini-button { padding: 5px 8px; font-size: 9px; }
 .mini-button.active { border-color: #a9bbaa; color: #56705a; }
@@ -365,8 +446,9 @@ onMounted(async () => {
   .admin-main { width: min(100% - 32px, 1040px); padding-top: 36px; }
   .create-form, .form-grid, .franchise-row { grid-template-columns: 1fr; }
   .field.full, .create-actions, .inline-panel { grid-column: auto; }
-  .toolbar { align-items: stretch; flex-direction: column; }
+  .toolbar, .sync-row { align-items: stretch; flex-direction: column; }
   .search-box { width: 100%; }
   .row-actions { justify-content: flex-start; }
+  .review-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 </style>

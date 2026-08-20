@@ -17,6 +17,14 @@ export const franchiseApi = {
     return api.patch(`/api/admin/franchises/${franchiseId}`, payload)
   },
 
+  syncIgdb(franchiseId) {
+    return api.post(`/api/admin/franchises/${franchiseId}/sync-igdb`, null, { timeout: 60000 })
+  },
+
+  mergeAdmin(franchiseId, targetFranchiseId) {
+    return api.post(`/api/admin/franchises/${franchiseId}/merge`, { targetFranchiseId })
+  },
+
   linkGame(franchiseId, gameId, isPrimary = false) {
     return api.post(`/api/admin/franchises/${franchiseId}/games`, { gameId, isPrimary })
   },

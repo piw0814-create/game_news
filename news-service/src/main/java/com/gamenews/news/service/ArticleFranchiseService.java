@@ -4,10 +4,12 @@ import com.gamenews.news.dto.ArticleFranchiseDto;
 import com.gamenews.news.entity.ArticleFranchise;
 import com.gamenews.news.entity.Franchise;
 import com.gamenews.news.entity.NewsArticle;
+import com.gamenews.news.event.FranchiseResolvedEvent;
 import com.gamenews.news.repository.ArticleFranchiseRepository;
 import com.gamenews.news.repository.FranchiseRepository;
 import com.gamenews.news.repository.NewsArticleRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -21,6 +23,7 @@ public class ArticleFranchiseService {
     private final ArticleFranchiseRepository articleFranchiseRepository;
     private final NewsArticleRepository newsArticleRepository;
     private final FranchiseRepository franchiseRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     @Transactional
     public ArticleFranchiseDto.ArticleFranchiseResponse linkFranchise(
@@ -42,8 +45,9 @@ public class ArticleFranchiseService {
                 .relevanceReason(normalizeReason(request.getRelevanceReason()))
                 .build();
 
-        return ArticleFranchiseDto.ArticleFranchiseResponse.from(
-                articleFranchiseRepository.save(relation));
+        ArticleFranchise saved = articleFranchiseRepository.save(relation);
+        eventPublisher.publishEvent(new FranchiseResolvedEvent(franchise.getId()));
+        return ArticleFranchiseDto.ArticleFranchiseResponse.from(saved);
     }
 
     public List<ArticleFranchiseDto.ArticleFranchiseResponse> getFranchisesByArticle(Long articleId) {

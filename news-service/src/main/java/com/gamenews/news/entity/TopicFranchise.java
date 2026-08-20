@@ -59,6 +59,10 @@ public class TopicFranchise {
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 
+    public void reassignFranchise(Franchise franchise) {
+        this.franchise = franchise;
+    }
+
     public void absorbMetadata(boolean primary, BigDecimal relevanceScore) {
         this.primary = this.primary || primary;
         if (relevanceScore != null

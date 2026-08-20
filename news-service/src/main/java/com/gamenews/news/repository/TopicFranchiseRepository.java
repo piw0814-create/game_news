@@ -18,6 +18,8 @@ public interface TopicFranchiseRepository extends JpaRepository<TopicFranchise, 
 
     List<TopicFranchise> findAllByFranchise_IdOrderByIdAsc(Long franchiseId);
 
+    long countByFranchise_Id(Long franchiseId);
+
     @Query("""
             select distinct tf
             from TopicFranchise tf

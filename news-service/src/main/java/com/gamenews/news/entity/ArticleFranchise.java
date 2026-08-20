@@ -61,6 +61,10 @@ public class ArticleFranchise {
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
+    public void reassignFranchise(Franchise franchise) {
+        this.franchise = franchise;
+    }
+
     public void absorbMetadata(boolean primary, BigDecimal confidenceScore, String relevanceReason) {
         this.primary = this.primary || primary;
         if (confidenceScore != null && (this.confidenceScore == null || confidenceScore.compareTo(this.confidenceScore) > 0)) {

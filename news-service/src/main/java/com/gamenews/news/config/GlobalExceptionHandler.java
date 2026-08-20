@@ -1,6 +1,7 @@
 package com.gamenews.news.config;
 
 import com.gamenews.news.common.ApiResponse;
+import com.gamenews.news.exception.AmbiguousGameIdentityException;
 import com.gamenews.news.exception.IgdbIntegrationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -23,6 +24,13 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(e.getMessage()));
     }
 
+
+
+    @ExceptionHandler(AmbiguousGameIdentityException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAmbiguousGameIdentity(AmbiguousGameIdentityException e) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiResponse.error(e.getMessage()));
+    }
 
     @ExceptionHandler(IgdbIntegrationException.class)
     public ResponseEntity<ApiResponse<Void>> handleIgdbIntegration(IgdbIntegrationException e) {

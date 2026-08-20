@@ -65,7 +65,6 @@ public class GameEnrichmentService {
     @Transactional
     public GameDto.GameResponse apply(Long gameId, Long igdbId) {
         Game game = findGame(gameId);
-
         gameRepository.findByIgdbId(igdbId)
                 .filter(existing -> !existing.getId().equals(gameId))
                 .ifPresent(existing -> {
@@ -73,9 +72,23 @@ public class GameEnrichmentService {
                             "해당 IGDB 게임은 이미 다른 Game에 연결되어 있습니다: #" + existing.getId());
                 });
 
-        IgdbClient.IgdbGame raw = igdbClient.getGameById(igdbId);
-        GameEnrichmentDto.Candidate candidate = toCandidate(game, raw);
+        return applyRawSnapshot(game, igdbClient.getGameById(igdbId));
+    }
 
+    @Transactional
+    public GameDto.GameResponse applyRawSnapshot(Game game, IgdbClient.IgdbGame raw) {
+        if (game == null || raw == null || raw.getId() == null || raw.getName() == null || raw.getName().isBlank()) {
+            throw new IllegalArgumentException("IGDB 게임 id/name이 필요합니다");
+        }
+
+        gameRepository.findByIgdbId(raw.getId())
+                .filter(existing -> !existing.getId().equals(game.getId()))
+                .ifPresent(existing -> {
+                    throw new IllegalArgumentException(
+                            "해당 IGDB 게임은 이미 다른 Game에 연결되어 있습니다: #" + existing.getId());
+                });
+
+        GameEnrichmentDto.Candidate candidate = toCandidate(game, raw);
         String developer = candidate.getDeveloper();
         String publisher = candidate.getPublisher();
         String genre = join(candidate.getGenres());
@@ -91,18 +104,68 @@ public class GameEnrichmentService {
                 ? GameEnrichmentStatus.ENRICHED
                 : GameEnrichmentStatus.PARTIAL;
 
-        game.applyEnrichment(
-                igdbId,
+        String oldCanonicalName = game.getName();
+        game.applyIgdbSnapshot(
+                raw.getId(),
+                raw.getName(),
                 developer,
                 publisher,
                 genre,
                 platform,
                 imageUrl,
+                raw.getGameType() == null ? null : raw.getGameType().getType(),
+                raw.getVersionParent(),
                 status);
 
+        if (oldCanonicalName != null
+                && !oldCanonicalName.equalsIgnoreCase(game.getName())
+                && !gameIdentityService.isIdentityUsedByAnotherGame(game.getId(), oldCanonicalName)) {
+            game.addAlias(oldCanonicalName);
+        }
         mergeAliases(game, candidate);
         franchiseService.syncIgdbFranchises(game, raw.getFranchise(), raw.getFranchises());
+        gameRepository.save(game);
         return GameDto.GameResponse.from(game);
+    }
+
+    @Transactional
+    public boolean autoApplyBestMatch(Long gameId) {
+        Game game = findGame(gameId);
+        if (!igdbClient.isConfigured()) return false;
+        if (game.getIgdbId() != null) return true;
+
+        List<IgdbClient.IgdbGame> results = new ArrayList<>(igdbClient.searchGames(game.getName(), 5));
+        if (results.isEmpty() && game.getDisplayName() != null && !game.getDisplayName().isBlank()) {
+            results.addAll(igdbClient.searchGames(game.getDisplayName(), 5));
+        }
+        if (results.isEmpty()) return false;
+
+        List<GameEnrichmentDto.Candidate> candidates = results.stream()
+                .map(result -> toCandidate(game, result))
+                .sorted((left, right) -> right.getMatchScore().compareTo(left.getMatchScore()))
+                .toList();
+        GameEnrichmentDto.Candidate best = candidates.get(0);
+        BigDecimal secondScore = candidates.size() > 1 ? candidates.get(1).getMatchScore() : BigDecimal.ZERO;
+        List<IgdbClient.IgdbGame> exactIdentityMatches = results.stream()
+                .filter(raw -> hasExactIdentityMatch(game, raw))
+                .toList();
+        boolean exactUnique = exactIdentityMatches.size() == 1
+                && exactIdentityMatches.get(0).getId().equals(best.getIgdbId());
+        boolean strongUnique = best.getMatchScore().compareTo(new BigDecimal("0.9500")) >= 0
+                && best.getMatchScore().subtract(secondScore).compareTo(new BigDecimal("0.0500")) >= 0;
+        if (!exactUnique && !strongUnique) return false;
+
+        apply(gameId, best.getIgdbId());
+        return true;
+    }
+
+    @Transactional
+    public GameDto.GameResponse refresh(Long gameId) {
+        Game game = findGame(gameId);
+        if (game.getIgdbId() == null) {
+            throw new IllegalArgumentException("IGDB ID가 연결되지 않은 게임입니다: " + gameId);
+        }
+        return apply(gameId, game.getIgdbId());
     }
 
     private void mergeAliases(Game game, GameEnrichmentDto.Candidate candidate) {
@@ -121,11 +184,9 @@ public class GameEnrichmentService {
         }
 
         for (String alias : normalized) {
-            gameIdentityService.findExact(alias)
-                    .filter(existing -> !existing.getId().equals(game.getId()))
-                    .ifPresentOrElse(existing -> {
-                        // 다른 Game에서 이미 사용하는 식별자는 건드리지 않는다.
-                    }, () -> game.addAlias(alias));
+            if (!gameIdentityService.isIdentityUsedByAnotherGame(game.getId(), alias)) {
+                game.addAlias(alias);
+            }
         }
     }
 
@@ -257,6 +318,24 @@ public class GameEnrichmentService {
             }
         }
         return List.copyOf(names);
+    }
+
+    private boolean hasExactIdentityMatch(Game game, IgdbClient.IgdbGame raw) {
+        if (raw == null) return false;
+        Set<String> current = gameIdentities(game).stream()
+                .filter(this::hasText)
+                .map(this::identityKey)
+                .collect(java.util.stream.Collectors.toSet());
+        List<String> external = new ArrayList<>();
+        external.add(raw.getName());
+        safe(raw.getAlternativeNames()).forEach(value -> external.add(value.getName()));
+        safe(raw.getGameLocalizations()).forEach(value -> external.add(value.getName()));
+        return external.stream().filter(this::hasText).map(this::identityKey).anyMatch(current::contains);
+    }
+
+    private String identityKey(String value) {
+        return value == null ? "" : value.toLowerCase(Locale.ROOT)
+                .replaceAll("[^\\p{L}\\p{N}]", "");
     }
 
     private String normalizeCoverUrl(String url) {

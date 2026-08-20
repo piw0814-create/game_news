@@ -71,6 +71,16 @@ public class Topic {
         this.lastUpdatedAt = time;
     }
 
+    public void absorbArticleTime(LocalDateTime time) {
+        if (time == null) return;
+        if (this.firstSeenAt == null || time.isBefore(this.firstSeenAt)) {
+            this.firstSeenAt = time;
+        }
+        if (this.lastUpdatedAt == null || time.isAfter(this.lastUpdatedAt)) {
+            this.lastUpdatedAt = time;
+        }
+    }
+
     public void updateAnalysis(
             String title,
             String summary,
