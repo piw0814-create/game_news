@@ -91,7 +91,7 @@
           <input
             v-model.trim="searchKeyword"
             type="search"
-            placeholder="게임 이름이나 회사 검색"
+            placeholder="게임 이름 · 별칭 · 회사 검색"
             autocomplete="off"
           />
         </label>
@@ -109,7 +109,7 @@
             class="game-row"
           >
             <div class="game-info">
-              <h3>{{ game.name }}</h3>
+              <h3>{{ gameDisplayName(game) }}</h3>
               <p class="publisher">{{ game.publisher || '퍼블리셔 정보 없음' }}</p>
               <p class="meta">{{ gameMeta(game) }}</p>
             </div>
@@ -178,7 +178,7 @@ const filteredGames = computed(() => {
   if (!keyword) return interestStore.games
 
   return interestStore.games.filter((game) => {
-    const searchable = [game.name, game.publisher, game.genre, game.platform]
+    const searchable = [game.name, game.displayName, ...(game.aliases || []), game.publisher, game.genre, game.platform]
       .filter(Boolean)
       .join(' ')
       .toLocaleLowerCase('ko-KR')
@@ -220,6 +220,10 @@ watch(gameTotalPages, (totalPages) => {
 function gameMeta(game) {
   const values = [game.genre, game.platform].filter(Boolean)
   return values.length ? values.join(' · ') : '추가 정보 없음'
+}
+
+function gameDisplayName(game) {
+  return game?.displayName || game?.name || ''
 }
 
 async function addInterest(gameId) {

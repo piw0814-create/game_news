@@ -55,6 +55,9 @@ public class ArticleGame {
     @Column(name = "confidence_score", precision = 5, scale = 4)
     private BigDecimal confidenceScore;
 
+    @Column(name = "relevance_reason", columnDefinition = "TEXT")
+    private String relevanceReason;
+
     @CreatedDate
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
@@ -68,6 +71,12 @@ public class ArticleGame {
         if (other.confidenceScore != null
                 && (this.confidenceScore == null || other.confidenceScore.compareTo(this.confidenceScore) > 0)) {
             this.confidenceScore = other.confidenceScore;
+            if (other.relevanceReason != null && !other.relevanceReason.isBlank()) {
+                this.relevanceReason = other.relevanceReason;
+            }
+        } else if ((this.relevanceReason == null || this.relevanceReason.isBlank())
+                && other.relevanceReason != null && !other.relevanceReason.isBlank()) {
+            this.relevanceReason = other.relevanceReason;
         }
     }
 }

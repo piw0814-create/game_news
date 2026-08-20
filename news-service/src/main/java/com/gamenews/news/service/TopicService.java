@@ -57,6 +57,7 @@ public class TopicService {
         return TopicDto.TopicResponse.from(
                 saved,
                 List.of(),
+                List.of(),
                 calculateRecencyBonus(saved.getLastUpdatedAt(), now),
                 saved.getImportanceScore(),
                 0,
@@ -85,6 +86,14 @@ public class TopicService {
                         )
                 ));
 
+        Map<Long, List<TopicDto.GameSummary>> gamesByTopicId = topicGameRepository
+                .findAllWithGameDetailsByTopicIds(topicIds)
+                .stream()
+                .collect(Collectors.groupingBy(
+                        topicGame -> topicGame.getTopic().getId(),
+                        Collectors.mapping(TopicDto.GameSummary::from, Collectors.toList())
+                ));
+
         Map<Long, Long> likeCountByTopicId = topicLikeRepository.countByTopicIds(topicIds)
                 .stream()
                 .collect(Collectors.toMap(
@@ -109,6 +118,7 @@ public class TopicService {
                     return TopicDto.TopicResponse.from(
                             topic,
                             gameIdsByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
+                            gamesByTopicId.getOrDefault(topic.getId(), Collections.emptyList()),
                             calculateRecencyBonus(topic.getLastUpdatedAt(), now),
                             calculateFinalImportance(topic.getImportanceScore(), engagementBonus),
                             likeCount,

@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
 public class InterestDto {
 
@@ -19,6 +20,8 @@ public class InterestDto {
     public static class GameSummary {
         private Long id;
         private String name;
+        private String displayName;
+        private List<String> aliases;
         private String publisher;
         private String genre;
         private String platform;
@@ -43,7 +46,9 @@ public class InterestDto {
             return InterestResponse.builder()
                     .id(userGame.getId())
                     .gameId(userGame.getGameId())
-                    .gameName(game.getName())
+                    .gameName(game.getDisplayName() == null || game.getDisplayName().isBlank()
+                            ? game.getName()
+                            : game.getDisplayName())
                     .publisher(game.getPublisher())
                     .genre(game.getGenre())
                     .platform(game.getPlatform())

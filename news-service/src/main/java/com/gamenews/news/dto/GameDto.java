@@ -1,6 +1,9 @@
 package com.gamenews.news.dto;
 
 import com.gamenews.news.entity.Game;
+import com.gamenews.news.entity.GameAlias;
+import com.gamenews.news.entity.GameEnrichmentStatus;
+import com.gamenews.news.entity.GameMetadataSource;
 import com.gamenews.news.entity.GameRegistrationSource;
 import com.gamenews.news.entity.GameReviewStatus;
 import jakarta.validation.constraints.DecimalMax;
@@ -17,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.List;
 
 public class GameDto {
 
@@ -30,8 +34,16 @@ public class GameDto {
         @Size(max = 255, message = "게임 이름은 255자 이하여야 합니다")
         private String name;
 
+        @Size(max = 255, message = "표시 이름은 255자 이하여야 합니다")
+        private String displayName;
+
+        private List<@Size(max = 255, message = "별칭은 255자 이하여야 합니다") String> aliases;
+
         @Size(max = 255, message = "퍼블리셔는 255자 이하여야 합니다")
         private String publisher;
+
+        @Size(max = 255, message = "개발사는 255자 이하여야 합니다")
+        private String developer;
 
         @Size(max = 100, message = "장르는 100자 이하여야 합니다")
         private String genre;
@@ -52,8 +64,16 @@ public class GameDto {
         @Size(max = 255, message = "게임 이름은 255자 이하여야 합니다")
         private String name;
 
+        @Size(max = 255, message = "표시 이름은 255자 이하여야 합니다")
+        private String displayName;
+
+        private List<@Size(max = 255, message = "별칭은 255자 이하여야 합니다") String> aliases;
+
         @Size(max = 255, message = "퍼블리셔는 255자 이하여야 합니다")
         private String publisher;
+
+        @Size(max = 255, message = "개발사는 255자 이하여야 합니다")
+        private String developer;
 
         @Size(max = 100, message = "장르는 100자 이하여야 합니다")
         private String genre;
@@ -113,10 +133,17 @@ public class GameDto {
     public static class GameResponse {
         private Long id;
         private String name;
+        private String displayName;
+        private List<String> aliases;
         private String publisher;
+        private String developer;
         private String genre;
         private String platform;
         private String imageUrl;
+        private Long igdbId;
+        private GameMetadataSource metadataSource;
+        private GameEnrichmentStatus enrichmentStatus;
+        private OffsetDateTime lastEnrichedAt;
         private GameRegistrationSource registrationSource;
         private GameReviewStatus reviewStatus;
         private BigDecimal registrationConfidence;
@@ -128,10 +155,19 @@ public class GameDto {
             return GameResponse.builder()
                     .id(game.getId())
                     .name(game.getName())
+                    .displayName(game.getDisplayName())
+                    .aliases(game.getAliases().stream().map(GameAlias::getAlias).toList())
                     .publisher(game.getPublisher())
+                    .developer(game.getDeveloper())
                     .genre(game.getGenre())
                     .platform(game.getPlatform())
                     .imageUrl(game.getImageUrl())
+                    .igdbId(game.getIgdbId())
+                    .metadataSource(game.getMetadataSource())
+                    .enrichmentStatus(game.getEnrichmentStatus() == null
+                            ? GameEnrichmentStatus.NOT_ENRICHED
+                            : game.getEnrichmentStatus())
+                    .lastEnrichedAt(toUtc(game.getLastEnrichedAt()))
                     .registrationSource(game.getRegistrationSource())
                     .reviewStatus(game.getReviewStatus())
                     .registrationConfidence(game.getRegistrationConfidence())

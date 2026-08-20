@@ -25,6 +25,15 @@ public interface TopicGameRepository extends JpaRepository<TopicGame, Long> {
             """)
     List<TopicGameIdView> findGameIdsByTopicIds(@Param("topicIds") List<Long> topicIds);
 
+    @Query("""
+            select distinct tg
+            from TopicGame tg
+            join fetch tg.game g
+            left join fetch g.aliases
+            where tg.topic.id in :topicIds
+            """)
+    List<TopicGame> findAllWithGameDetailsByTopicIds(@Param("topicIds") List<Long> topicIds);
+
     interface TopicGameIdView {
         Long getTopicId();
         Long getGameId();

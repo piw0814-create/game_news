@@ -3,7 +3,7 @@ import logging
 from app.client.news_client import NewsServiceError, news_client
 from app.client.openai_client import openai_article_analyzer
 from app.config.settings import settings
-from app.model.schemas import AnalysisStatus
+from app.model.schemas import AnalysisStatus, ArticleEntityType
 from app.service.topic_analysis_service import topic_analysis_service
 from app.service.topic_integration_service import topic_integration_service
 
@@ -50,7 +50,8 @@ class ArticleAnalysisService:
             )
 
             games = news_client.get_games()
-            analysis = openai_article_analyzer.analyze(article, games)
+            franchises = news_client.get_franchises()
+            analysis = openai_article_analyzer.analyze(article, games, franchises)
 
             if not analysis.gameNewsRelevant:
                 completed = news_client.update_analysis(
@@ -67,7 +68,14 @@ class ArticleAnalysisService:
                 )
                 return True
 
+            logger.info(
+                "[ArticleAnalysis] 엔티티 범위 판정 - articleId=%s entityType=%s",
+                article_id,
+                getattr(analysis.entityType, "value", analysis.entityType),
+            )
+
             self._link_games(article_id, analysis, games)
+            self._link_franchises(article_id, analysis, franchises)
 
             topic_result = topic_integration_service.integrate(article, analysis)
             logger.info(
@@ -119,17 +127,69 @@ class ArticleAnalysisService:
             return self._mark_failed(article_id)
 
     def _link_games(self, article_id: int, analysis, games) -> None:
-        game_by_name = {game.name.strip().casefold(): game for game in games}
+        article_entity_type = self._entity_type(
+            getattr(analysis, "entityType", ArticleEntityType.MIXED),
+            ArticleEntityType.MIXED,
+        )
+        if article_entity_type in {
+            ArticleEntityType.FRANCHISE,
+            ArticleEntityType.UNNAMED_ENTRY,
+            ArticleEntityType.NONE,
+        }:
+            logger.info(
+                "[ArticleAnalysis] 기사 범위가 특정 게임이 아니므로 Game 연결 생략 - "
+                "articleId=%s entityType=%s",
+                article_id,
+                article_entity_type.value,
+            )
+            return
+
+        game_by_name = {}
+        for game in games:
+            for identity in self._game_identities(game):
+                game_by_name.setdefault(identity, game)
+
         existing_links = news_client.get_article_games(article_id)
         existing_game_ids = {link.gameId for link in existing_links}
 
+        link_threshold = settings.game_review_create_confidence_threshold
+
         for related_game in analysis.relatedGames:
+            related_entity_type = self._entity_type(
+                getattr(related_game, "entityType", ArticleEntityType.SPECIFIC_GAME),
+                ArticleEntityType.SPECIFIC_GAME,
+            )
+            if related_entity_type != ArticleEntityType.SPECIFIC_GAME:
+                logger.info(
+                    "[ArticleAnalysis] 특정 Game 판별이 아니므로 연결/자동등록 생략 - "
+                    "articleId=%s game=%s entityType=%s confidence=%.2f reason=%s",
+                    article_id,
+                    related_game.name,
+                    related_entity_type.value,
+                    related_game.confidenceScore,
+                    related_game.reason,
+                )
+                continue
+
+            if related_game.confidenceScore < link_threshold:
+                logger.info(
+                    "[ArticleAnalysis] 게임 관련성 신뢰도 부족으로 연결 생략 - "
+                    "articleId=%s game=%s confidence=%.2f threshold=%.2f reason=%s",
+                    article_id,
+                    related_game.name,
+                    related_game.confidenceScore,
+                    link_threshold,
+                    related_game.reason,
+                )
+                continue
+
             matched = game_by_name.get(related_game.name.strip().casefold())
             if matched is None:
                 matched = self._resolve_unregistered_game(article_id, related_game)
                 if matched is None:
                     continue
-                game_by_name[matched.name.strip().casefold()] = matched
+                for identity in self._game_identities(matched):
+                    game_by_name.setdefault(identity, matched)
 
             if matched.id in existing_game_ids:
                 logger.info(
@@ -144,16 +204,134 @@ class ArticleAnalysisService:
                 game_id=matched.id,
                 is_primary=related_game.isPrimary,
                 confidence_score=related_game.confidenceScore,
+                relevance_reason=related_game.reason,
             )
             existing_game_ids.add(matched.id)
             logger.info(
-                "[ArticleAnalysis] ArticleGame 연결 - articleId=%s gameId=%s confidence=%.2f",
+                "[ArticleAnalysis] ArticleGame 연결 - articleId=%s gameId=%s confidence=%.2f reason=%s",
                 article_id,
                 matched.id,
                 related_game.confidenceScore,
+                related_game.reason,
             )
 
+
+    def _link_franchises(self, article_id: int, analysis, franchises) -> None:
+        article_entity_type = self._entity_type(
+            getattr(analysis, "entityType", ArticleEntityType.MIXED),
+            ArticleEntityType.MIXED,
+        )
+        if article_entity_type in {ArticleEntityType.SPECIFIC_GAME, ArticleEntityType.NONE}:
+            logger.info(
+                "[ArticleAnalysis] 기사 범위가 Franchise가 아니므로 Franchise 연결 생략 - "
+                "articleId=%s entityType=%s",
+                article_id,
+                article_entity_type.value,
+            )
+            return
+
+        franchise_by_name = {}
+        for franchise in franchises:
+            for identity in self._franchise_identities(franchise):
+                franchise_by_name.setdefault(identity, franchise)
+
+        existing_links = news_client.get_article_franchises(article_id)
+        existing_franchise_ids = {link.franchiseId for link in existing_links}
+        link_threshold = settings.game_review_create_confidence_threshold
+
+        for related_franchise in analysis.relatedFranchises:
+            related_entity_type = self._entity_type(
+                getattr(related_franchise, "entityType", ArticleEntityType.FRANCHISE),
+                ArticleEntityType.FRANCHISE,
+            )
+            if related_entity_type not in {
+                ArticleEntityType.FRANCHISE,
+                ArticleEntityType.UNNAMED_ENTRY,
+            }:
+                logger.info(
+                    "[ArticleAnalysis] Franchise 범위 판별이 아니므로 연결 생략 - "
+                    "articleId=%s franchise=%s entityType=%s confidence=%.2f reason=%s",
+                    article_id,
+                    related_franchise.name,
+                    related_entity_type.value,
+                    related_franchise.confidenceScore,
+                    related_franchise.reason,
+                )
+                continue
+
+            if related_franchise.confidenceScore < link_threshold:
+                logger.info(
+                    "[ArticleAnalysis] 프랜차이즈 관련성 신뢰도 부족으로 연결 생략 - "
+                    "articleId=%s franchise=%s confidence=%.2f threshold=%.2f reason=%s",
+                    article_id,
+                    related_franchise.name,
+                    related_franchise.confidenceScore,
+                    link_threshold,
+                    related_franchise.reason,
+                )
+                continue
+
+            matched = franchise_by_name.get(related_franchise.name.strip().casefold())
+            if matched is None:
+                logger.info(
+                    "[ArticleAnalysis] Known Franchise가 아니므로 연결 생략 - articleId=%s franchise=%s",
+                    article_id,
+                    related_franchise.name,
+                )
+                continue
+
+            if matched.id in existing_franchise_ids:
+                continue
+
+            news_client.link_franchise(
+                article_id=article_id,
+                franchise_id=matched.id,
+                is_primary=related_franchise.isPrimary,
+                confidence_score=related_franchise.confidenceScore,
+                relevance_reason=related_franchise.reason,
+            )
+            existing_franchise_ids.add(matched.id)
+            logger.info(
+                "[ArticleAnalysis] ArticleFranchise 연결 - articleId=%s franchiseId=%s confidence=%.2f reason=%s",
+                article_id,
+                matched.id,
+                related_franchise.confidenceScore,
+                related_franchise.reason,
+            )
+
+    def _franchise_identities(self, franchise):
+        values = [franchise.name, franchise.displayName, *(franchise.aliases or [])]
+        return {
+            value.strip().casefold()
+            for value in values
+            if value and value.strip()
+        }
+
+    def _game_identities(self, game):
+        values = [game.name, game.displayName, *(game.aliases or [])]
+        return {
+            value.strip().casefold()
+            for value in values
+            if value and value.strip()
+        }
+
     def _resolve_unregistered_game(self, article_id: int, related_game):
+        entity_type = self._entity_type(
+            getattr(related_game, "entityType", ArticleEntityType.SPECIFIC_GAME),
+            ArticleEntityType.SPECIFIC_GAME,
+        )
+        if entity_type != ArticleEntityType.SPECIFIC_GAME:
+            logger.info(
+                "[ArticleAnalysis] 특정 작품 식별이 아니므로 미등록 Game 생성 차단 - "
+                "articleId=%s game=%s entityType=%s confidence=%.2f reason=%s",
+                article_id,
+                related_game.name,
+                entity_type.value,
+                related_game.confidenceScore,
+                related_game.reason,
+            )
+            return None
+
         confidence = related_game.confidenceScore
         review_threshold = settings.game_review_create_confidence_threshold
         auto_threshold = settings.game_auto_create_confidence_threshold
@@ -170,7 +348,7 @@ class ArticleAnalysisService:
             return None
 
         review_status = (
-            "AI_CREATED"
+            "CONFIRMED"
             if confidence >= auto_threshold
             else "REVIEW_REQUIRED"
         )
@@ -193,6 +371,14 @@ class ArticleAnalysisService:
             confidence,
         )
         return result.game
+
+    def _entity_type(self, value, default: ArticleEntityType) -> ArticleEntityType:
+        if isinstance(value, ArticleEntityType):
+            return value
+        try:
+            return ArticleEntityType(str(value))
+        except (TypeError, ValueError):
+            return default
 
     def _mark_failed(self, article_id: int) -> bool:
         try:

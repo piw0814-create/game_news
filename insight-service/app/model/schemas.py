@@ -22,6 +22,14 @@ class AnalysisStatus(str, Enum):
     FAILED = "FAILED"
 
 
+class ArticleEntityType(str, Enum):
+    SPECIFIC_GAME = "SPECIFIC_GAME"
+    FRANCHISE = "FRANCHISE"
+    UNNAMED_ENTRY = "UNNAMED_ENTRY"
+    MIXED = "MIXED"
+    NONE = "NONE"
+
+
 class NewsArticleResponse(BaseModel):
     id: int
     title: str
@@ -42,7 +50,10 @@ class NewsArticleResponse(BaseModel):
 class GameResponse(BaseModel):
     id: int
     name: str
+    displayName: Optional[str] = None
+    aliases: List[str] = Field(default_factory=list)
     publisher: Optional[str] = None
+    developer: Optional[str] = None
     genre: Optional[str] = None
     platform: Optional[str] = None
     imageUrl: Optional[str] = None
@@ -52,6 +63,31 @@ class GameResponse(BaseModel):
     sourceArticleId: Optional[int] = None
     createdAt: Optional[datetime] = None
     updatedAt: Optional[datetime] = None
+
+
+
+
+class FranchiseResponse(BaseModel):
+    id: int
+    name: str
+    displayName: Optional[str] = None
+    aliases: List[str] = Field(default_factory=list)
+    igdbId: Optional[int] = None
+    metadataSource: Optional[str] = None
+    createdAt: Optional[datetime] = None
+    updatedAt: Optional[datetime] = None
+
+
+class ArticleFranchiseResponse(BaseModel):
+    id: int
+    articleId: int
+    franchiseId: int
+    franchiseName: str
+    franchiseDisplayName: Optional[str] = None
+    isPrimary: bool
+    confidenceScore: Optional[float] = None
+    relevanceReason: Optional[str] = None
+    createdAt: Optional[datetime] = None
 
 
 class GameResolveOrCreateResponse(BaseModel):
@@ -64,22 +100,62 @@ class ArticleGameResponse(BaseModel):
     articleId: int
     gameId: int
     gameName: str
+    gameDisplayName: Optional[str] = None
     isPrimary: bool
     confidenceScore: Optional[float] = None
+    relevanceReason: Optional[str] = None
     createdAt: Optional[datetime] = None
 
 
 class RelatedGameAnalysis(BaseModel):
-    name: str = Field(description="기사에서 직접 다루는 게임의 공식 이름")
+    name: str = Field(description="기사에서 직접 다루는 특정 게임의 공식/canonical 이름")
+    entityType: ArticleEntityType = Field(
+        description=(
+            "이 항목의 엔티티 범위. 실제 특정 작품으로 식별된 경우 SPECIFIC_GAME. "
+            "FRANCHISE/UNNAMED_ENTRY/NONE으로 판단되면 Game 연결/자동등록 대상이 아님"
+        )
+    )
     isPrimary: bool = Field(description="기사의 가장 중심적인 게임인지 여부")
     confidenceScore: float = Field(
         ge=0.0,
         le=1.0,
-        description="해당 게임이 기사와 관련 있다는 신뢰도",
+        description="해당 특정 게임이 기사와 관련 있다는 신뢰도",
+    )
+    reason: str = Field(
+        min_length=1,
+        max_length=1000,
+        description="단순 문자열 일치가 아니라 이 기사가 실제 해당 특정 게임을 다룬다고 판단한 짧은 근거",
+    )
+
+
+class RelatedFranchiseAnalysis(BaseModel):
+    name: str = Field(description="기사에서 직접 다루는 프랜차이즈의 canonical 이름")
+    entityType: ArticleEntityType = Field(
+        description=(
+            "FRANCHISE=IP/시리즈 전체를 다룸, UNNAMED_ENTRY=정식 작품명이 특정되지 않은 차기/신규 엔트리를 다룸. "
+            "이 두 경우 모두 ArticleFranchise로 연결"
+        )
+    )
+    isPrimary: bool = Field(description="기사의 가장 중심적인 프랜차이즈인지 여부")
+    confidenceScore: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="프랜차이즈 범위 또는 미명명 차기작 범위라는 판단 신뢰도",
+    )
+    reason: str = Field(
+        min_length=1,
+        max_length=1000,
+        description="프랜차이즈 전체 또는 정식 작품명이 특정되지 않은 차기작 범위라고 판단한 짧은 근거",
     )
 
 
 class ArticleAnalysisResult(BaseModel):
+    entityType: ArticleEntityType = Field(
+        description=(
+            "기사의 중심 엔티티 범위. 특정 게임 중심=SPECIFIC_GAME, 프랜차이즈 전체=FRANCHISE, "
+            "정식 제목이 특정되지 않은 차기작=UNNAMED_ENTRY, 둘 이상이 동시에 중심=MIXED, 관련 엔티티 없음=NONE"
+        )
+    )
     gameNewsRelevant: bool = Field(
         description=(
             "게임 자체, 게임 산업, 게임 플랫폼/하드웨어, 또는 게임 IP 생태계와 "
@@ -96,6 +172,10 @@ class ArticleAnalysisResult(BaseModel):
     relatedGames: List[RelatedGameAnalysis] = Field(
         max_length=5,
         description="기사에서 직접 다루는 게임. 게임이 없으면 빈 배열",
+    )
+    relatedFranchises: List[RelatedFranchiseAnalysis] = Field(
+        max_length=3,
+        description="특정 작품이 아니라 프랜차이즈/IP 전체를 직접 다루는 경우의 프랜차이즈. 없으면 빈 배열",
     )
 
 
@@ -142,6 +222,8 @@ class TopicAnalysisTopicContext(BaseModel):
 class TopicAnalysisGameContext(BaseModel):
     id: int
     name: str
+    displayName: Optional[str] = None
+    aliases: List[str] = Field(default_factory=list)
     publisher: Optional[str] = None
     genre: Optional[str] = None
     platform: Optional[str] = None

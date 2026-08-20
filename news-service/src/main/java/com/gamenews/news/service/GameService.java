@@ -17,24 +17,31 @@ import java.util.List;
 public class GameService {
 
     private final GameRepository gameRepository;
+    private final GameIdentityService gameIdentityService;
 
     @Transactional
     public synchronized GameDto.GameResponse createGame(GameDto.CreateRequest request) {
         String normalizedName = request.getName().trim();
 
-        if (gameRepository.existsByNameIgnoreCase(normalizedName)) {
-            throw new IllegalArgumentException("이미 등록된 게임입니다: " + normalizedName);
-        }
+        String displayName = gameIdentityService.normalizeDisplayName(
+                normalizedName, request.getDisplayName());
+        List<String> aliases = gameIdentityService.normalizeAliases(
+                normalizedName, displayName, request.getAliases());
+
+        gameIdentityService.validateAvailable(null, normalizedName, displayName, aliases);
 
         Game game = Game.builder()
                 .name(normalizedName)
+                .displayName(displayName)
                 .publisher(trimToNull(request.getPublisher()))
+                .developer(trimToNull(request.getDeveloper()))
                 .genre(trimToNull(request.getGenre()))
                 .platform(trimToNull(request.getPlatform()))
                 .imageUrl(trimToNull(request.getImageUrl()))
                 .registrationSource(GameRegistrationSource.MANUAL)
                 .reviewStatus(GameReviewStatus.CONFIRMED)
                 .build();
+        game.replaceAliases(aliases);
 
         return GameDto.GameResponse.from(gameRepository.save(game));
     }
@@ -44,7 +51,7 @@ public class GameService {
             GameDto.ResolveOrCreateAiRequest request) {
         String normalizedName = request.getName().trim();
 
-        Game existing = gameRepository.findByNameIgnoreCase(normalizedName).orElse(null);
+        Game existing = gameIdentityService.findExact(normalizedName).orElse(null);
         if (existing != null) {
             return GameDto.ResolveOrCreateResponse.builder()
                     .created(false)
@@ -52,10 +59,10 @@ public class GameService {
                     .build();
         }
 
-        if (request.getReviewStatus() != GameReviewStatus.AI_CREATED
+        if (request.getReviewStatus() != GameReviewStatus.CONFIRMED
                 && request.getReviewStatus() != GameReviewStatus.REVIEW_REQUIRED) {
             throw new IllegalArgumentException(
-                    "AI 자동 등록은 AI_CREATED 또는 REVIEW_REQUIRED 상태만 사용할 수 있습니다");
+                    "AI 자동 등록은 CONFIRMED 또는 REVIEW_REQUIRED 상태만 사용할 수 있습니다");
         }
 
         Game game = Game.builder()

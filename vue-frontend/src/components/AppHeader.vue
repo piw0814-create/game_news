@@ -17,6 +17,14 @@
         >
           게임 관리
         </router-link>
+        <router-link
+          v-if="auth.isAdmin"
+          to="/admin/franchises"
+          class="nav-link"
+          :class="{ active: route.name === 'AdminFranchises' }"
+        >
+          프랜차이즈
+        </router-link>
       </nav>
 
       <div class="header-actions">

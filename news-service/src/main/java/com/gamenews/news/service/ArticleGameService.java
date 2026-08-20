@@ -36,6 +36,7 @@ public class ArticleGameService {
                 .game(game)
                 .primary(request.isPrimary())
                 .confidenceScore(request.getConfidenceScore())
+                .relevanceReason(normalizeReason(request.getRelevanceReason()))
                 .build();
 
         return ArticleGameDto.ArticleGameResponse.from(articleGameRepository.save(articleGame));
@@ -52,6 +53,13 @@ public class ArticleGameService {
     private NewsArticle findArticleById(Long articleId) {
         return newsArticleRepository.findById(articleId)
                 .orElseThrow(() -> new IllegalArgumentException("기사를 찾을 수 없습니다: " + articleId));
+    }
+
+    private String normalizeReason(String relevanceReason) {
+        if (relevanceReason == null || relevanceReason.isBlank()) {
+            return null;
+        }
+        return relevanceReason.trim();
     }
 
     private Game findGameById(Long gameId) {

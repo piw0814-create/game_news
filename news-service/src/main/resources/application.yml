@@ -55,3 +55,8 @@ app:
   kafka:
     topics:
       news-created: news.created
+  igdb:
+    client-id: ${IGDB_CLIENT_ID:}
+    client-secret: ${IGDB_CLIENT_SECRET:}
+    api-base-url: ${IGDB_API_BASE_URL:https://api.igdb.com/v4}
+    token-url: ${IGDB_TOKEN_URL:https://id.twitch.tv/oauth2/token}

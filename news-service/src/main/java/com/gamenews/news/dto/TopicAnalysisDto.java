@@ -2,6 +2,7 @@ package com.gamenews.news.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.gamenews.news.entity.GameAlias;
 import com.gamenews.news.entity.Topic;
 import com.gamenews.news.entity.TopicArticle;
 import com.gamenews.news.entity.TopicGame;
@@ -52,6 +53,8 @@ public class TopicAnalysisDto {
     public static class GameContext {
         private Long id;
         private String name;
+        private String displayName;
+        private List<String> aliases;
         private String publisher;
         private String genre;
         private String platform;
@@ -63,6 +66,8 @@ public class TopicAnalysisDto {
             return GameContext.builder()
                     .id(topicGame.getGame().getId())
                     .name(topicGame.getGame().getName())
+                    .displayName(topicGame.getGame().getDisplayName())
+                    .aliases(topicGame.getGame().getAliases().stream().map(GameAlias::getAlias).toList())
                     .publisher(topicGame.getGame().getPublisher())
                     .genre(topicGame.getGame().getGenre())
                     .platform(topicGame.getGame().getPlatform())

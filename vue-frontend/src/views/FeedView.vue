@@ -297,7 +297,21 @@ const filteredTopics = computed(() => {
 
     if (!keyword) return true;
 
-    const searchableText = [topic.title, topic.summary, topic.whyImportant]
+    const gameSearchText = (Array.isArray(topic.games) ? topic.games : [])
+      .flatMap((game) => [
+        game?.name,
+        game?.displayName,
+        game?.publisher,
+        ...(Array.isArray(game?.aliases) ? game.aliases : []),
+      ])
+      .filter(Boolean);
+
+    const searchableText = [
+      topic.title,
+      topic.summary,
+      topic.whyImportant,
+      ...gameSearchText,
+    ]
       .filter(Boolean)
       .join(" ")
       .toLocaleLowerCase("ko-KR");

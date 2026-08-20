@@ -88,7 +88,9 @@ class OpenAITopicAnalyzer:
             game_blocks.append(
                 "\n".join(
                     [
-                        f"Name: {game.name}",
+                        f"Canonical name: {game.name}",
+                        f"Display name: {game.displayName or game.name}",
+                        f"Aliases: {', '.join(game.aliases) if game.aliases else '-'}",
                         f"Publisher: {game.publisher or 'unknown'}",
                         f"Genre: {game.genre or 'unknown'}",
                         f"Platform: {game.platform or 'unknown'}",

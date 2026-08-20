@@ -62,6 +62,7 @@ public class TopicDto {
         private long commentCount;
         private int engagementBonus;
         private List<Long> gameIds;
+        private List<GameSummary> games;
         private Integer recencyBonus;
         private OffsetDateTime firstSeenAt;
         private OffsetDateTime lastUpdatedAt;
@@ -80,6 +81,7 @@ public class TopicDto {
                     .commentCount(0)
                     .engagementBonus(0)
                     .gameIds(List.of())
+                    .games(List.of())
                     .recencyBonus(0)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))
                     .lastUpdatedAt(toUtc(topic.getLastUpdatedAt()))
@@ -91,6 +93,7 @@ public class TopicDto {
         public static TopicResponse from(
                 Topic topic,
                 List<Long> gameIds,
+                List<GameSummary> games,
                 Integer recencyBonus,
                 Integer importanceScore,
                 long likeCount,
@@ -107,6 +110,7 @@ public class TopicDto {
                     .commentCount(commentCount)
                     .engagementBonus(engagementBonus)
                     .gameIds(gameIds)
+                    .games(games)
                     .recencyBonus(recencyBonus)
                     .firstSeenAt(toUtc(topic.getFirstSeenAt()))
                     .lastUpdatedAt(toUtc(topic.getLastUpdatedAt()))
@@ -124,6 +128,9 @@ public class TopicDto {
     public static class GameSummary {
         private Long id;
         private String name;
+        private String displayName;
+        private List<String> aliases;
+        private String publisher;
 
         @JsonProperty("isPrimary")
         private boolean isPrimary;
@@ -134,6 +141,11 @@ public class TopicDto {
             return GameSummary.builder()
                     .id(topicGame.getGame().getId())
                     .name(topicGame.getGame().getName())
+                    .displayName(topicGame.getGame().getDisplayName())
+                    .aliases(topicGame.getGame().getAliases().stream()
+                            .map(alias -> alias.getAlias())
+                            .toList())
+                    .publisher(topicGame.getGame().getPublisher())
                     .isPrimary(topicGame.isPrimary())
                     .relevanceScore(topicGame.getRelevanceScore())
                     .build();

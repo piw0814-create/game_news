@@ -13,6 +13,10 @@ public interface GameRepository extends JpaRepository<Game, Long> {
 
     Optional<Game> findByNameIgnoreCase(String name);
 
+    Optional<Game> findByDisplayNameIgnoreCase(String displayName);
+
+    Optional<Game> findByIgdbId(Long igdbId);
+
     List<Game> findAllByOrderByCreatedAtDesc();
 
     List<Game> findAllByReviewStatusOrderByCreatedAtDesc(GameReviewStatus reviewStatus);

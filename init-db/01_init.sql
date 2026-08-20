@@ -15,19 +15,65 @@ CREATE TABLE IF NOT EXISTS users (
 
 -- 게임 뉴스 서비스의 게임 기준 정보
 CREATE TABLE IF NOT EXISTS games (
-    id          BIGINT          NOT NULL AUTO_INCREMENT,
-    name        VARCHAR(255)    NOT NULL UNIQUE,
-    publisher   VARCHAR(255),
+    id           BIGINT          NOT NULL AUTO_INCREMENT,
+    name         VARCHAR(255)    NOT NULL UNIQUE,
+    display_name VARCHAR(255),
+    publisher    VARCHAR(255),
     genre       VARCHAR(100),
     platform                VARCHAR(255),
     image_url               VARCHAR(1000),
     registration_source     VARCHAR(20)     NOT NULL DEFAULT 'MANUAL' COMMENT 'MANUAL | AI',
-    review_status           VARCHAR(30)     NOT NULL DEFAULT 'CONFIRMED' COMMENT 'CONFIRMED | AI_CREATED | REVIEW_REQUIRED',
+    review_status           VARCHAR(30)     NOT NULL DEFAULT 'CONFIRMED' COMMENT 'CONFIRMED | REVIEW_REQUIRED',
     registration_confidence DECIMAL(5,4),
     source_article_id       BIGINT,
     created_at              DATETIME(6)     NOT NULL,
     updated_at  DATETIME(6)     NOT NULL,
     PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+
+-- 게임 기준명 외에 검색/AI 매칭에 사용할 별칭
+CREATE TABLE IF NOT EXISTS game_aliases (
+    id       BIGINT       NOT NULL AUTO_INCREMENT,
+    game_id  BIGINT       NOT NULL,
+    alias    VARCHAR(255) NOT NULL UNIQUE,
+    PRIMARY KEY (id),
+    KEY idx_game_alias_game_id (game_id),
+    FOREIGN KEY (game_id) REFERENCES games(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 게임 IP/프랜차이즈 기준 정보 (IGDB Franchise와 연결 가능)
+CREATE TABLE IF NOT EXISTS franchises (
+    id              BIGINT       NOT NULL AUTO_INCREMENT,
+    name            VARCHAR(255) NOT NULL UNIQUE,
+    display_name    VARCHAR(255),
+    igdb_id         BIGINT UNIQUE,
+    metadata_source VARCHAR(30) COMMENT 'MANUAL | IGDB',
+    created_at      DATETIME(6) NOT NULL,
+    updated_at      DATETIME(6) NOT NULL,
+    PRIMARY KEY (id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS franchise_aliases (
+    id            BIGINT       NOT NULL AUTO_INCREMENT,
+    franchise_id  BIGINT       NOT NULL,
+    alias         VARCHAR(255) NOT NULL UNIQUE,
+    PRIMARY KEY (id),
+    KEY idx_franchise_alias_franchise_id (franchise_id),
+    FOREIGN KEY (franchise_id) REFERENCES franchises(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- Game은 main franchise 1개 + 기타 franchise 여러 개에 속할 수 있으므로 N:M으로 관리
+CREATE TABLE IF NOT EXISTS game_franchises (
+    id            BIGINT      NOT NULL AUTO_INCREMENT,
+    game_id       BIGINT      NOT NULL,
+    franchise_id  BIGINT      NOT NULL,
+    is_primary    BOOLEAN     NOT NULL DEFAULT FALSE,
+    created_at    DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_game_franchise (game_id, franchise_id),
+    FOREIGN KEY (game_id) REFERENCES games(id),
+    FOREIGN KEY (franchise_id) REFERENCES franchises(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 외부에서 수집한 원본 게임 뉴스 기사
@@ -69,11 +115,27 @@ CREATE TABLE IF NOT EXISTS article_games (
     game_id           BIGINT          NOT NULL,
     is_primary        BOOLEAN         NOT NULL DEFAULT FALSE,
     confidence_score  DECIMAL(5,4),
+    relevance_reason  TEXT,
     created_at        DATETIME(6)     NOT NULL,
     PRIMARY KEY (id),
     UNIQUE KEY uq_article_game (article_id, game_id),
     FOREIGN KEY (article_id) REFERENCES news_articles(id),
     FOREIGN KEY (game_id) REFERENCES games(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 기사와 프랜차이즈의 N:M 관계: 특정 작품이 아니라 IP/프랜차이즈 전체를 직접 다룰 때 사용
+CREATE TABLE IF NOT EXISTS article_franchises (
+    id                BIGINT          NOT NULL AUTO_INCREMENT,
+    article_id        BIGINT          NOT NULL,
+    franchise_id      BIGINT          NOT NULL,
+    is_primary        BOOLEAN         NOT NULL DEFAULT FALSE,
+    confidence_score  DECIMAL(5,4),
+    relevance_reason  TEXT,
+    created_at        DATETIME(6)     NOT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_article_franchise (article_id, franchise_id),
+    FOREIGN KEY (article_id) REFERENCES news_articles(id),
+    FOREIGN KEY (franchise_id) REFERENCES franchises(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- Topic과 기사의 N:M 관계

@@ -6,6 +6,7 @@ import com.gamenews.news.entity.ArticleGame;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -33,6 +34,9 @@ public class ArticleGameDto {
         @DecimalMin(value = "0.0", message = "신뢰도는 0 이상이어야 합니다")
         @DecimalMax(value = "1.0", message = "신뢰도는 1 이하여야 합니다")
         private BigDecimal confidenceScore;
+
+        @Size(max = 1000, message = "관련성 근거는 1000자 이하여야 합니다")
+        private String relevanceReason;
     }
 
     @Getter
@@ -45,9 +49,11 @@ public class ArticleGameDto {
         private Long articleId;
         private Long gameId;
         private String gameName;
+        private String gameDisplayName;
         @JsonProperty("isPrimary")
         private boolean isPrimary;
         private BigDecimal confidenceScore;
+        private String relevanceReason;
         private OffsetDateTime createdAt;
 
         public static ArticleGameResponse from(ArticleGame articleGame) {
@@ -56,8 +62,10 @@ public class ArticleGameDto {
                     .articleId(articleGame.getArticle().getId())
                     .gameId(articleGame.getGame().getId())
                     .gameName(articleGame.getGame().getName())
+                    .gameDisplayName(articleGame.getGame().getDisplayName())
                     .isPrimary(articleGame.isPrimary())
                     .confidenceScore(articleGame.getConfidenceScore())
+                    .relevanceReason(articleGame.getRelevanceReason())
                     .createdAt(toUtc(articleGame.getCreatedAt()))
                     .build();
         }

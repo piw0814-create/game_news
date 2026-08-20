@@ -6,7 +6,9 @@ import httpx
 from app.config.settings import settings
 from app.model.schemas import (
     AnalysisStatus,
+    ArticleFranchiseResponse,
     ArticleGameResponse,
+    FranchiseResponse,
     GameResolveOrCreateResponse,
     GameResponse,
     NewsArticleResponse,
@@ -40,6 +42,10 @@ class NewsServiceClient:
     def get_games(self) -> List[GameResponse]:
         data = self._request("GET", "/api/games")
         return [GameResponse.model_validate(item) for item in data]
+
+    def get_franchises(self) -> List[FranchiseResponse]:
+        data = self._request("GET", "/api/franchises")
+        return [FranchiseResponse.model_validate(item) for item in data]
 
     def resolve_or_create_ai_game(
         self,
@@ -79,6 +85,30 @@ class NewsServiceClient:
         data = self._request("GET", f"/api/news/{article_id}/games")
         return [ArticleGameResponse.model_validate(item) for item in data]
 
+    def get_article_franchises(self, article_id: int) -> List[ArticleFranchiseResponse]:
+        data = self._request("GET", f"/api/news/{article_id}/franchises")
+        return [ArticleFranchiseResponse.model_validate(item) for item in data]
+
+    def link_franchise(
+        self,
+        article_id: int,
+        franchise_id: int,
+        is_primary: bool,
+        confidence_score: float,
+        relevance_reason: str,
+    ) -> ArticleFranchiseResponse:
+        data = self._request(
+            "POST",
+            f"/api/news/{article_id}/franchises",
+            json={
+                "franchiseId": franchise_id,
+                "isPrimary": is_primary,
+                "confidenceScore": confidence_score,
+                "relevanceReason": relevance_reason,
+            },
+        )
+        return ArticleFranchiseResponse.model_validate(data)
+
     def update_analysis_status(
         self,
         article_id: int,
@@ -115,6 +145,7 @@ class NewsServiceClient:
         game_id: int,
         is_primary: bool,
         confidence_score: float,
+        relevance_reason: str,
     ) -> ArticleGameResponse:
         data = self._request(
             "POST",
@@ -123,6 +154,7 @@ class NewsServiceClient:
                 "gameId": game_id,
                 "isPrimary": is_primary,
                 "confidenceScore": confidence_score,
+                "relevanceReason": relevance_reason,
             },
         )
         return ArticleGameResponse.model_validate(data)

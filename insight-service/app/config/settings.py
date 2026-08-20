@@ -41,6 +41,7 @@ class Settings(BaseSettings):
     openai_max_content_chars: int = 12000
     openai_max_output_tokens: int = 1200
     openai_known_games_limit: int = 200
+    openai_known_franchises_limit: int = 100
     openai_topic_match_max_output_tokens: int = 500
     openai_topic_analysis_max_output_tokens: int = 900
 

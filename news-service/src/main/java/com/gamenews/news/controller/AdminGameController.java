@@ -2,8 +2,14 @@ package com.gamenews.news.controller;
 
 import com.gamenews.news.common.ApiResponse;
 import com.gamenews.news.dto.GameDto;
+import com.gamenews.news.dto.GameEnrichmentDto;
+import com.gamenews.news.dto.GameReviewDto;
+import com.gamenews.news.dto.GameReviewResolutionDto;
 import com.gamenews.news.entity.GameReviewStatus;
 import com.gamenews.news.service.GameAdminService;
+import com.gamenews.news.service.GameEnrichmentService;
+import com.gamenews.news.service.GameReviewService;
+import com.gamenews.news.service.GameReviewResolutionService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +30,9 @@ import java.util.List;
 public class AdminGameController {
 
     private final GameAdminService gameAdminService;
+    private final GameEnrichmentService gameEnrichmentService;
+    private final GameReviewService gameReviewService;
+    private final GameReviewResolutionService gameReviewResolutionService;
 
     @GetMapping
     public ResponseEntity<ApiResponse<List<GameDto.GameResponse>>> getGames(
@@ -54,6 +63,34 @@ public class AdminGameController {
             @Valid @RequestBody GameDto.MergeRequest request) {
         return ResponseEntity.ok(ApiResponse.success(
                 gameAdminService.mergeGame(id, request.getTargetGameId())));
+    }
+
+    @GetMapping("/{id}/review-context")
+    public ResponseEntity<ApiResponse<GameReviewDto.ReviewContextResponse>> getReviewContext(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(gameReviewService.getReviewContext(id)));
+    }
+
+    @PostMapping("/{id}/enrichment/preview")
+    public ResponseEntity<ApiResponse<GameEnrichmentDto.PreviewResponse>> previewEnrichment(
+            @PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(gameEnrichmentService.preview(id)));
+    }
+
+    @PostMapping("/{id}/enrichment/apply")
+    public ResponseEntity<ApiResponse<GameDto.GameResponse>> applyEnrichment(
+            @PathVariable Long id,
+            @Valid @RequestBody GameEnrichmentDto.ApplyRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                gameEnrichmentService.apply(id, request.getIgdbId())));
+    }
+
+    @PostMapping("/{id}/resolve-franchise")
+    public ResponseEntity<ApiResponse<GameReviewResolutionDto.ResolveAsFranchiseResponse>> resolveAsFranchise(
+            @PathVariable Long id,
+            @Valid @RequestBody GameReviewResolutionDto.ResolveAsFranchiseRequest request) {
+        return ResponseEntity.ok(ApiResponse.success(
+                gameReviewResolutionService.resolveAsFranchise(id, request.getFranchiseId())));
     }
 
     @PostMapping("/{id}/reject")

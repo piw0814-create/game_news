@@ -45,6 +45,7 @@ public class TopicGameDto {
         private Long topicId;
         private Long gameId;
         private String gameName;
+        private String gameDisplayName;
         @JsonProperty("isPrimary")
         private boolean isPrimary;
         private BigDecimal relevanceScore;
@@ -56,6 +57,7 @@ public class TopicGameDto {
                     .topicId(topicGame.getTopic().getId())
                     .gameId(topicGame.getGame().getId())
                     .gameName(topicGame.getGame().getName())
+                    .gameDisplayName(topicGame.getGame().getDisplayName())
                     .isPrimary(topicGame.isPrimary())
                     .relevanceScore(topicGame.getRelevanceScore())
                     .createdAt(toUtc(topicGame.getCreatedAt()))

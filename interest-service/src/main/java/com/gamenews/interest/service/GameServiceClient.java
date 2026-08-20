@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
@@ -49,6 +50,8 @@ public class GameServiceClient {
             return InterestDto.GameSummary.builder()
                     .id(toLong(dataMap.get("id")))
                     .name(toStringValue(dataMap.get("name")))
+                    .displayName(toStringValue(dataMap.get("displayName")))
+                    .aliases(toStringList(dataMap.get("aliases")))
                     .publisher(toStringValue(dataMap.get("publisher")))
                     .genre(toStringValue(dataMap.get("genre")))
                     .platform(toStringValue(dataMap.get("platform")))
@@ -77,5 +80,15 @@ public class GameServiceClient {
 
     private String toStringValue(Object value) {
         return value == null ? null : value.toString();
+    }
+
+    private List<String> toStringList(Object value) {
+        if (!(value instanceof List<?> list)) {
+            return List.of();
+        }
+        return list.stream()
+                .filter(item -> item != null)
+                .map(Object::toString)
+                .toList();
     }
 }

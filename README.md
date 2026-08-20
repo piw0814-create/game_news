@@ -155,12 +155,12 @@ Insight Service는 `news.created`를 기사 1건씩 처리하고, 시작 시 `PE
 기사 분석 중 기존 Game과 일치하지 않는 게임이 발견되면 confidence에 따라 자동등록합니다.
 
 ```text
-confidence >= 0.90        → AI_CREATED
+confidence >= 0.90        → CONFIRMED (AI 자동확정)
 0.60 <= confidence < 0.90 → REVIEW_REQUIRED
 confidence < 0.60         → 자동등록하지 않음
 ```
 
-자동등록된 Game은 즉시 `ArticleGame`으로 기사에 연결되어 파이프라인을 계속 진행합니다. 관리자는 `/admin/games` 화면에서 수정, 확정, 병합, 거절할 수 있으며 확정 시 `CONFIRMED` 상태가 됩니다. 병합/거절 시 News Service 관계뿐 아니라 Interest Service의 `UserGame` 참조도 함께 정리합니다.
+자동등록된 Game은 즉시 `ArticleGame`으로 기사에 연결되어 파이프라인을 계속 진행합니다. 고신뢰 AI 등록은 `CONFIRMED`로 바로 사용하되 `registrationSource=AI`, `registrationConfidence`, `sourceArticleId`를 유지해 등록 이력을 구분합니다. 중간 신뢰도만 `REVIEW_REQUIRED`로 관리자 검토 대상이 됩니다. 관리자는 `/admin/games` 화면에서 등록 출처와 관계없이 정보를 수정하거나 병합할 수 있고, 검토 필요 Game은 확정 또는 거절할 수 있습니다. 병합/거절 시 News Service 관계뿐 아니라 Interest Service의 `UserGame` 참조도 함께 정리합니다.
 
 ## 실행 전 준비
 
@@ -304,24 +304,3 @@ API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `in
 이 프로젝트는 교육용 MSA 예제를 출발점으로 게임 뉴스 도메인에 맞게 확장·재구성했습니다. 현재는 개발·포트폴리오 목적의 MVP이며, 운영 환경에서는 보안·관측·백업·비밀값 관리 등의 추가 보완이 필요합니다.
 
 현재 자체 서비스 패키지는 `com.gamenews.*`, DB는 `game_news_db`, Docker 네트워크는 `game-news-net`, 인증은 User Service 기반 자체 RS256 JWT 구조를 사용합니다.
-
-## Deployment-ready Docker frontend
-
-Local development remains unchanged:
-
-```bash
-# backend / infrastructure
-docker compose up -d
-
-# frontend dev server
-cd vue-frontend
-npm run dev
-```
-
-For a single-host deployment, build and run the production Nginx frontend together with the existing services:
-
-```bash
-docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d --build
-```
-
-The production frontend serves the Vue build and proxies `/api` to `api-gateway:8080` over the internal Docker network. Internal service host ports are bound to `127.0.0.1` so they are not directly exposed on the server's public interface. Copy `.env.example` to `.env` and replace the example database/JWT values before deployment.

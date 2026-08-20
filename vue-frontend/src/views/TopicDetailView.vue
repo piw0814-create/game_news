@@ -60,7 +60,7 @@
           <div v-if="games.length" class="game-list">
             <div v-for="game in games" :key="game.id" class="game-row">
               <div>
-                <strong>{{ game.name }}</strong>
+                <strong>{{ game.displayName || game.name }}</strong>
                 <span v-if="game.isPrimary" class="primary-label">주요 게임</span>
               </div>
               <span v-if="game.relevanceScore != null" class="score-label">
