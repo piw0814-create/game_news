@@ -57,7 +57,7 @@ class OpenAITopicAnalyzer:
             ],
             text_format=TopicSemanticAnalysisResult,
             max_output_tokens=settings.openai_topic_analysis_max_output_tokens,
-            prompt_cache_key="game-intelligence:topic-analysis:v1",
+            prompt_cache_options={"mode": "explicit"},
         )
         log_openai_usage(response, "topic_analysis", context.topic.id)
 

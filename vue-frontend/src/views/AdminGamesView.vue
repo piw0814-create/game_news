@@ -39,19 +39,31 @@
           </button>
         </div>
 
-        <label class="search-box">
-          <span class="sr-only">게임 검색</span>
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <circle cx="11" cy="11" r="6.5" />
-            <path d="m16 16 4 4" />
-          </svg>
-          <input
-            v-model.trim="searchKeyword"
-            type="search"
-            placeholder="게임명 · 별칭 · 퍼블리셔 검색"
-            autocomplete="off"
-          />
-        </label>
+        <div class="search-tools">
+          <label class="search-box">
+            <span class="sr-only">게임 검색</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="11" cy="11" r="6.5" />
+              <path d="m16 16 4 4" />
+            </svg>
+            <input
+              v-model.trim="searchKeyword"
+              type="search"
+              placeholder="게임명 · 별칭 · 퍼블리셔 검색"
+              autocomplete="off"
+            />
+          </label>
+          <label class="igdb-id-search">
+            <span class="sr-only">IGDB ID 검색</span>
+            <input
+              v-model.trim="igdbIdKeyword"
+              type="search"
+              inputmode="numeric"
+              placeholder="IGDB ID"
+              autocomplete="off"
+            />
+          </label>
+        </div>
       </section>
 
       <section class="game-section">
@@ -152,7 +164,7 @@
                 <input
                   v-model.trim="mergeKeyword"
                   type="search"
-                  placeholder="게임명 · 별칭 검색"
+                  placeholder="게임명 · 별칭 · IGDB ID 검색"
                   autocomplete="off"
                 />
               </label>
@@ -292,6 +304,7 @@ const loading = ref(false)
 const error = ref('')
 const notice = ref('')
 const searchKeyword = ref('')
+const igdbIdKeyword = ref('')
 const activeFilter = ref('ALL')
 const editingGameId = ref(null)
 const mergingGameId = ref(null)
@@ -325,11 +338,13 @@ const currentTabLabel = computed(() => tabs.find((tab) => tab.value === activeFi
 
 const filteredGames = computed(() => {
   const keyword = searchKeyword.value.toLocaleLowerCase('ko-KR')
+  const igdbId = igdbIdKeyword.value
 
   return games.value.filter((game) => {
     if (activeFilter.value === 'IGDB_LINKED' && !game.igdbId) return false
     if (activeFilter.value === 'IGDB_UNLINKED' && game.igdbId) return false
 
+    if (igdbId && String(game.igdbId ?? '') !== igdbId) return false
     if (!keyword) return true
 
     const searchable = [game.name, game.displayName, ...(game.aliases || []), game.publisher, game.developer, game.genre, game.platform]
@@ -350,7 +365,7 @@ const pagedGames = computed(() => {
   return filteredGames.value.slice(start, start + PAGE_SIZE)
 })
 
-watch([activeFilter, searchKeyword], () => {
+watch([activeFilter, searchKeyword, igdbIdKeyword], () => {
   currentPage.value = 1
   closePanels()
 })
@@ -585,7 +600,7 @@ function mergeTargets(sourceGameId) {
   return games.value
     .filter((game) => game.id !== sourceGameId)
     .filter((game) => {
-      const searchable = [game.name, game.displayName, ...(game.aliases || []), game.publisher, game.developer]
+      const searchable = [game.name, game.displayName, ...(game.aliases || []), game.publisher, game.developer, game.igdbId]
         .filter(Boolean)
         .join(' ')
         .toLocaleLowerCase('ko-KR')
@@ -745,6 +760,13 @@ onMounted(loadGames)
   color: #202329;
 }
 
+.search-tools {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  width: min(500px, 100%);
+}
+
 .search-box {
   display: flex;
   align-items: center;
@@ -775,6 +797,27 @@ onMounted(loadGames)
   color: #25292f;
   font: inherit;
   font-size: 12px;
+}
+
+.igdb-id-search {
+  width: 112px;
+  flex: 0 0 112px;
+}
+
+.igdb-id-search input {
+  width: 100%;
+  height: 40px;
+  border: 0;
+  border-bottom: 1px solid #cfd3d8;
+  outline: 0;
+  background: transparent;
+  color: #25292f;
+  font: inherit;
+  font-size: 12px;
+}
+
+.igdb-id-search input:focus {
+  border-bottom-color: #4d535c;
 }
 
 .game-section {
@@ -1290,8 +1333,17 @@ onMounted(loadGames)
     overflow-x: auto;
   }
 
+  .search-tools {
+    width: 100%;
+  }
+
   .search-box {
     width: 100%;
+  }
+
+  .igdb-id-search {
+    width: 104px;
+    flex-basis: 104px;
   }
 
   .game-row {

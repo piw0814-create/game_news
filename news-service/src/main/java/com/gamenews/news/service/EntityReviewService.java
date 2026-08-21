@@ -150,11 +150,27 @@ public class EntityReviewService {
             }
         }
 
+        // Some AI names concatenate the parent game's full subtitle with an expansion/DLC
+        // title (e.g. "S.T.A.L.K.E.R. 2: Heart of Chornobyl – Cost of Hope"). Only after the
+        // normal and Standard Edition lookups return nothing, try a collapsed review-only key.
+        // Never AUTO_LINK from this fallback: surface the result to the admin instead.
+        List<Game> reviewLocalCandidates = localCandidates;
+        String collapsedTailName = candidateRankingService.collapsedQualifiedTailName(request.getDetectedName());
+        if (gameCandidates.isEmpty() && collapsedTailName != null) {
+            reviewLocalCandidates = mergeLocalGameCandidates(
+                    reviewLocalCandidates,
+                    gameIdentityService.findExactCandidates(collapsedTailName));
+            List<IgdbClient.IgdbGame> collapsedExact = findExactGames(collapsedTailName);
+            gameCandidates = collapsedExact.isEmpty()
+                    ? searchGames(collapsedTailName)
+                    : collapsedExact;
+        }
+
         // SPECIFIC_GAME resolution stays game-only. Cross-kind Franchise discovery used to
         // add up to two extra IGDB calls on the latency-sensitive article path and could make
         // Insight time out even after a useful Game candidate list had already been built.
         // If Game identity is still ambiguous, persist a Game review and let the admin decide.
-        List<EntityReviewDto.Candidate> candidates = gameCandidates(localCandidates, gameCandidates);
+        List<EntityReviewDto.Candidate> candidates = gameCandidates(reviewLocalCandidates, gameCandidates);
 
         EntityReview review = createOrRefreshReview(article, EntityReviewKind.GAME, request, candidates);
         return EntityReviewDto.InternalResolveResponse.builder()
@@ -653,6 +669,17 @@ public class EntityReviewService {
                 });
     }
 
+    private List<Game> mergeLocalGameCandidates(List<Game> first, List<Game> second) {
+        Map<Long, Game> unique = new LinkedHashMap<>();
+        if (first != null) {
+            first.stream().filter(Objects::nonNull).forEach(game -> unique.putIfAbsent(game.getId(), game));
+        }
+        if (second != null) {
+            second.stream().filter(Objects::nonNull).forEach(game -> unique.putIfAbsent(game.getId(), game));
+        }
+        return new ArrayList<>(unique.values());
+    }
+
     private List<Franchise> findExactFranchiseCandidates(String value) {
         if (value == null || value.isBlank()) return List.of();
         return franchiseRepository.findExactIdentityCandidates(value.trim());
@@ -660,15 +687,37 @@ public class EntityReviewService {
 
     private List<EntityReviewDto.Candidate> buildCandidatesForReview(EntityReview review) {
         String name = review.getDetectedName();
+        String standardEditionBaseName = candidateRankingService.standardEditionBaseName(name);
+        List<Game> localGames = gameIdentityService.findExactCandidates(name);
+        if (localGames.isEmpty() && standardEditionBaseName != null) {
+            localGames = gameIdentityService.findExactCandidates(standardEditionBaseName);
+        }
+
         List<IgdbClient.IgdbGame> igdbGames = findExactGames(name);
         if (igdbGames.isEmpty()) {
             igdbGames = searchGames(name);
         }
+        if (igdbGames.isEmpty() && standardEditionBaseName != null) {
+            List<IgdbClient.IgdbGame> baseExact = findExactGames(standardEditionBaseName);
+            igdbGames = baseExact.isEmpty() ? searchGames(standardEditionBaseName) : baseExact;
+        }
+
+        if (review.getEntityKind() == EntityReviewKind.GAME && igdbGames.isEmpty()) {
+            String collapsedTailName = candidateRankingService.collapsedQualifiedTailName(name);
+            if (collapsedTailName != null) {
+                localGames = mergeLocalGameCandidates(
+                        localGames,
+                        gameIdentityService.findExactCandidates(collapsedTailName));
+                List<IgdbClient.IgdbGame> collapsedExact = findExactGames(collapsedTailName);
+                igdbGames = collapsedExact.isEmpty() ? searchGames(collapsedTailName) : collapsedExact;
+            }
+        }
+
         List<EntityReviewDto.Candidate> candidates = new ArrayList<>();
         if (review.getEntityKind() == EntityReviewKind.GAME) {
             // Reopening a Game review follows the same lightweight policy as resolveGame():
             // do not spend additional IGDB calls on cross-kind Franchise discovery.
-            candidates.addAll(gameCandidates(gameIdentityService.findExactCandidates(name), igdbGames));
+            candidates.addAll(gameCandidates(localGames, igdbGames));
         } else {
             List<IgdbClient.IgdbFranchise> directFranchises = findExactFranchises(name);
             if (directFranchises.isEmpty()) {

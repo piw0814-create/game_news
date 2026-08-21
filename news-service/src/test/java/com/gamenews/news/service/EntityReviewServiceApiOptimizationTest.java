@@ -394,6 +394,42 @@ class EntityReviewServiceApiOptimizationTest {
     }
 
     @Test
+    void compositeExpansionNameFallsBackToReviewCandidateWithoutAutoLink() throws Exception {
+        NewsArticle article = org.mockito.Mockito.mock(NewsArticle.class);
+        when(article.getId()).thenReturn(95L);
+        when(newsArticleRepository.findById(95L)).thenReturn(Optional.of(article));
+
+        String detected = "S.T.A.L.K.E.R. 2: Heart of Chornobyl – Cost of Hope";
+        String collapsed = "S.T.A.L.K.E.R. 2: Cost of Hope";
+        when(gameIdentityService.findExactCandidates(detected)).thenReturn(List.of());
+        when(gameIdentityService.findExactCandidates(collapsed)).thenReturn(List.of());
+        when(igdbClient.isConfigured()).thenReturn(true);
+        when(igdbClient.findGamesByExactName(detected, 20)).thenReturn(List.of());
+        when(igdbClient.searchGames(detected, 5)).thenReturn(List.of());
+        when(igdbClient.findGamesByExactName(collapsed, 20))
+                .thenReturn(List.of(game(396025L, collapsed, "Expansion")));
+        when(objectMapper.writeValueAsString(any())).thenReturn("[]");
+        when(entityReviewRepository.findFirstByArticle_IdAndEntityKindAndDetectedNameIgnoreCaseAndStatusOrderByIdDesc(
+                any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(entityReviewRepository.save(any(EntityReview.class))).then(returnsFirstArg());
+
+        EntityReviewDto.InternalResolveResponse response = service.resolveGame(
+                request(95L, detected, "Cost of Hope review roundup"));
+
+        assertThat(response.getOutcome()).isEqualTo(EntityReviewDto.ResolutionOutcome.REVIEW_REQUIRED);
+        verify(igdbClient).findGamesByExactName(collapsed, 20);
+        verify(igdbClient, never()).searchGames(collapsed, 5);
+        verify(gameRepository, never()).findByIgdbId(396025L);
+        verify(objectMapper).writeValueAsString(argThat(value -> {
+            if (!(value instanceof List<?> list)) return false;
+            return list.stream().anyMatch(item -> item instanceof EntityReviewDto.Candidate candidate
+                    && candidate.getEntityKind() == EntityReviewKind.GAME
+                    && Long.valueOf(396025L).equals(candidate.getIgdbId())
+                    && collapsed.equals(candidate.getName()));
+        }));
+    }
+
+    @Test
     void standardEditionFallsBackToBaseLookup() {
         NewsArticle article = org.mockito.Mockito.mock(NewsArticle.class);
         Game mapped = org.mockito.Mockito.mock(Game.class);

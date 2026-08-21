@@ -56,7 +56,7 @@ class OpenAITopicMatcher:
             ],
             text_format=TopicMatchResult,
             max_output_tokens=settings.openai_topic_match_max_output_tokens,
-            prompt_cache_key="game-intelligence:topic-match:v1",
+            prompt_cache_options={"mode": "explicit"},
         )
         log_openai_usage(response, "topic_match", article.id)
 

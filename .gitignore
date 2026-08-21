@@ -11,8 +11,6 @@ infra-images.tar
 # Python
 __pycache__/
 *.py[cod]
-.venv/
-venv/
 
 # Java / Gradle
 **/.gradle/

@@ -48,10 +48,16 @@
             </button>
           </div>
         </div>
-        <label class="search-box">
-          <span class="sr-only">검토 검색</span>
-          <input v-model.trim="search" type="search" placeholder="감지명 · 기사 제목 검색" />
-        </label>
+        <div class="search-tools">
+          <label class="search-box">
+            <span class="sr-only">검토 검색</span>
+            <input v-model.trim="search" type="search" placeholder="감지명 · 기사 제목 검색" />
+          </label>
+          <label class="igdb-id-search">
+            <span class="sr-only">IGDB ID 검색</span>
+            <input v-model.trim="igdbIdSearch" type="search" inputmode="numeric" placeholder="IGDB ID" autocomplete="off" />
+          </label>
+        </div>
       </section>
 
       <section class="review-list">
@@ -181,6 +187,7 @@ const notice = ref('')
 const status = ref('PENDING')
 const kindFilter = ref('ALL')
 const search = ref('')
+const igdbIdSearch = ref('')
 
 const tabs = [
   { value: 'PENDING', label: '검토 필요' },
@@ -197,8 +204,18 @@ const kindTabs = [
 
 const filteredReviews = computed(() => {
   const keyword = search.value.toLocaleLowerCase('ko-KR')
+  const igdbId = igdbIdSearch.value
+
   return reviews.value.filter((item) => {
     if (kindFilter.value !== 'ALL' && item.entityKind !== kindFilter.value) return false
+
+    if (igdbId) {
+      const exactCandidateMatch = (item.candidates || []).some((candidate) =>
+        String(candidate.igdbId ?? '') === igdbId || String(candidate.igdbCollectionId ?? '') === igdbId
+      )
+      if (!exactCandidateMatch) return false
+    }
+
     if (!keyword) return true
     return [item.detectedName, item.articleTitle, item.articleSourceName, item.reason]
       .filter(Boolean).join(' ').toLocaleLowerCase('ko-KR').includes(keyword)
@@ -374,8 +391,12 @@ onMounted(loadReviews)
 .status-tab.active { border-color: #22262c; color: #22262c; }
 .kind-tab { padding: 5px 8px; border: 0; background: #f5f6f7; color: #8a919a; font-size: 10px; font-weight: 700; }
 .kind-tab.active { background: #2a2e34; color: #fff; }
-.search-box { width: min(340px, 100%); }
+.search-tools { display: flex; align-items: flex-end; gap: 12px; width: min(480px, 100%); }
+.search-box { flex: 1 1 auto; min-width: 0; }
 .search-box input { width: 100%; height: 34px; border: 0; border-bottom: 1px solid #cfd3d8; outline: 0; font: inherit; font-size: 12px; }
+.igdb-id-search { width: 112px; flex: 0 0 112px; }
+.igdb-id-search input { width: 100%; height: 34px; border: 0; border-bottom: 1px solid #cfd3d8; outline: 0; font: inherit; font-size: 12px; }
+.igdb-id-search input:focus { border-bottom-color: #4d535c; }
 .review-list { border-top: 2px solid #17191d; }
 .review-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 26px; padding: 22px 2px; border-bottom: 1px solid #e8eaed; }
 .title-line { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
@@ -416,7 +437,9 @@ onMounted(loadReviews)
 @media (max-width: 760px) {
   .admin-main { width: min(100% - 32px, 1040px); }
   .page-heading, .toolbar { align-items: stretch; flex-direction: column; }
+  .search-tools { width: 100%; }
   .search-box { width: 100%; }
+  .igdb-id-search { width: 104px; flex-basis: 104px; }
   .review-row { grid-template-columns: 1fr; }
   .candidate-grid { grid-template-columns: 1fr; }
 }

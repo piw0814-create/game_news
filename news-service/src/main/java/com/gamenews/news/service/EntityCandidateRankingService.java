@@ -21,6 +21,9 @@ public class EntityCandidateRankingService {
     private static final Pattern NUMERIC_RANGE_PATTERN = Pattern.compile(
             "(?<![\\p{L}\\p{N}])([ivxlcdm]+|\\d+)\\s*[-–—]\\s*([ivxlcdm]+|\\d+)(?![\\p{L}\\p{N}])",
             Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
+    private static final Pattern QUALIFIED_TAIL_PATTERN = Pattern.compile(
+            "^(.+?:)\\s*(.+?)\\s+[-–—]\\s+(.+)$",
+            Pattern.UNICODE_CASE);
 
     public List<EntityReviewDto.Candidate> rank(
             String detectedName,
@@ -88,6 +91,30 @@ public class EntityCandidateRankingService {
         String stripped = normalized.replaceFirst(
                 "(?iu)\\s*[:\\-–—]?\\s*standard\\s+edition\\s*$", "").trim();
         return stripped.equals(normalized) || stripped.isBlank() ? null : stripped;
+    }
+
+    /**
+     * Review-only fallback for AI names that concatenate a parent game's full subtitle with
+     * a child expansion/DLC title, e.g.
+     * "S.T.A.L.K.E.R. 2: Heart of Chornobyl – Cost of Hope"
+     * -> "S.T.A.L.K.E.R. 2: Cost of Hope".
+     *
+     * This method only creates an alternate lookup key. Callers must not AUTO_LINK from this
+     * fallback; it exists to turn a zero-candidate review into an admin-verifiable candidate.
+     */
+    String collapsedQualifiedTailName(String value) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = normalizeUnicode(value).trim();
+        Matcher matcher = QUALIFIED_TAIL_PATTERN.matcher(normalized);
+        if (!matcher.matches()) return null;
+
+        String prefix = matcher.group(1).trim();
+        String middle = matcher.group(2).trim();
+        String tail = matcher.group(3).trim();
+        if (prefix.isBlank() || middle.isBlank() || tail.isBlank()) return null;
+
+        String collapsed = (prefix + " " + tail).trim();
+        return collapsed.equalsIgnoreCase(normalized) ? null : collapsed;
     }
 
     double identityScore(String detectedName, String candidateName) {

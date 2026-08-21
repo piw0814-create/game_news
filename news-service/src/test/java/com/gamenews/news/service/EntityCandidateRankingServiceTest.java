@@ -77,6 +77,15 @@ class EntityCandidateRankingServiceTest {
     }
 
     @Test
+    void compositeExpansionNameCanCollapseToReviewOnlyLookupKey() {
+        assertThat(service.collapsedQualifiedTailName(
+                "S.T.A.L.K.E.R. 2: Heart of Chornobyl – Cost of Hope"))
+                .isEqualTo("S.T.A.L.K.E.R. 2: Cost of Hope");
+        assertThat(service.collapsedQualifiedTailName("A Plague Tale: Requiem")).isNull();
+        assertThat(service.collapsedQualifiedTailName("Call of Duty – Black Ops")).isNull();
+    }
+
+    @Test
     void fc26PrefersCanonicalLeadingExpansionOverTrailingNoise() {
         List<EntityReviewDto.Candidate> ranked = service.rank(
                 "FC 26",

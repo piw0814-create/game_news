@@ -26,10 +26,16 @@
           <strong>Franchise</strong>
           <span>{{ filteredFranchises.length }}개</span>
         </div>
-        <label class="search-box">
-          <span class="sr-only">프랜차이즈 검색</span>
-          <input v-model.trim="searchKeyword" type="search" placeholder="이름 · 표시명 · 별칭 · IGDB ID 검색" />
-        </label>
+        <div class="search-tools">
+          <label class="search-box">
+            <span class="sr-only">프랜차이즈 검색</span>
+            <input v-model.trim="searchKeyword" type="search" placeholder="이름 · 표시명 · 별칭 검색" />
+          </label>
+          <label class="igdb-id-search">
+            <span class="sr-only">IGDB ID 검색</span>
+            <input v-model.trim="igdbIdKeyword" type="search" inputmode="numeric" placeholder="IGDB ID" autocomplete="off" />
+          </label>
+        </div>
       </section>
 
       <section class="franchise-list">
@@ -121,7 +127,7 @@
 
                 <label class="game-search">
                   <span>소속 게임 보정</span>
-                  <input v-model.trim="gameSearch" type="search" placeholder="게임명 · 별칭 검색" />
+                  <input v-model.trim="gameSearch" type="search" placeholder="게임명 · 별칭 · IGDB ID 검색" />
                 </label>
                 <div v-if="gameSearch" class="game-search-results">
                   <button v-for="game in gameCandidates(franchise.id)" :key="game.id" type="button" class="candidate-button" @click="linkGame(franchise, game)">
@@ -193,6 +199,7 @@ const saving = ref(false)
 const error = ref('')
 const notice = ref('')
 const searchKeyword = ref('')
+const igdbIdKeyword = ref('')
 const editingId = ref(null)
 const reviewingId = ref(null)
 const detailLoadingId = ref(null)
@@ -203,9 +210,16 @@ const editForm = reactive({ name: '', displayName: '', aliasesText: '' })
 
 const filteredFranchises = computed(() => {
   const keyword = searchKeyword.value.toLocaleLowerCase('ko-KR')
-  if (!keyword) return franchises.value
-  return franchises.value.filter((item) => [item.name, item.displayName, ...(item.aliases || []), item.igdbId]
-    .filter(Boolean).join(' ').toLocaleLowerCase('ko-KR').includes(keyword))
+  const igdbId = igdbIdKeyword.value
+
+  return franchises.value.filter((item) => {
+    const exactIdentityMatch = String(item.igdbId ?? '') === igdbId || String(item.igdbCollectionId ?? '') === igdbId
+    if (igdbId && !exactIdentityMatch) return false
+    if (!keyword) return true
+
+    return [item.name, item.displayName, ...(item.aliases || [])]
+      .filter(Boolean).join(' ').toLocaleLowerCase('ko-KR').includes(keyword)
+  })
 })
 
 function extractData(response) { return response?.data?.data ?? response?.data }
@@ -290,7 +304,7 @@ function gameCandidates(franchiseId) {
   const keyword = gameSearch.value.toLocaleLowerCase('ko-KR')
   const linked = new Set((detailFor(franchiseId)?.games || []).map((item) => item.gameId))
   return games.value.filter((game) => !linked.has(game.id)).filter((game) => {
-    const text = [game.name, game.displayName, ...(game.aliases || []), game.publisher, game.developer]
+    const text = [game.name, game.displayName, ...(game.aliases || []), game.publisher, game.developer, game.igdbId]
       .filter(Boolean).join(' ').toLocaleLowerCase('ko-KR')
     return text.includes(keyword)
   }).slice(0, 8)
@@ -354,7 +368,11 @@ onMounted(loadAll)
 .section-title { display: flex; gap: 8px; align-items: baseline; }
 .section-title strong { font-size: 16px; }
 .section-title span { color: #8b929b; font-size: 11px; }
-.search-box { width: min(360px, 100%); }
+.search-tools { display: flex; align-items: flex-end; gap: 12px; width: min(500px, 100%); }
+.search-box { flex: 1 1 auto; min-width: 0; }
+.igdb-id-search { width: 112px; flex: 0 0 112px; }
+.igdb-id-search input { width: 100%; height: 36px; padding: 0 2px; border: 0; border-bottom: 1px solid #cfd3d8; outline: 0; background: transparent; font: inherit; font-size: 12px; }
+.igdb-id-search input:focus { border-bottom-color: #4d535c; }
 .franchise-list { border-top: 2px solid #17191d; border-bottom: 1px solid #dfe2e6; }
 .franchise-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px 28px; padding: 22px 2px; border-bottom: 1px solid #eceef1; }
 .title-line { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
@@ -401,7 +419,9 @@ onMounted(loadAll)
   .form-grid, .franchise-row { grid-template-columns: 1fr; }
   .field.full, .inline-panel { grid-column: auto; }
   .toolbar, .sync-row { align-items: stretch; flex-direction: column; }
+  .search-tools { width: 100%; }
   .search-box { width: 100%; }
+  .igdb-id-search { width: 104px; flex-basis: 104px; }
   .row-actions { justify-content: flex-start; }
   .review-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
