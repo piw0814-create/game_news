@@ -26,17 +26,21 @@ Kafka: news.created
    ↓
 Insight Service
    ↓
-AI 기사 분석
+Article Analyzer 1회
    ↓
-AI + IGDB 엔티티 판정
+Game / Franchise Identity Resolution
+   ├─ Local exact 우선
+   ├─ 필요 시 IGDB Game / Franchise / Collection(Series) 확인
    ├─ 명확 → ArticleGame / ArticleFranchise 자동 연결
    └─ 애매 → EntityReview 관리자 검토 큐
    ↓
-동일 사건 Topic 판단
+Topic 후보 검색
+   ├─ 후보 없음 → Matcher 호출 없이 새 Topic 생성
+   └─ 후보 있음 → Topic Matcher로 동일 사건 여부 판단
    ↓
 기존 Topic 연결 / 새 Topic 생성
-   ↓
-Topic 전체 재분석
+   ├─ 단일기사 새 Topic → Article Analyzer 결과 재사용 (TopicAnalyzer SKIPPED)
+   └─ 기존 Topic에 새 기사 연결 → Topic Analyzer 재분석
    ↓
 title / summary / category
 importanceScore / whyImportant
@@ -47,11 +51,19 @@ Vue Topic Feed
 관심 게임 기반 개인화 정렬
 ```
 
+### 현재 AI 호출 최적화
+
+- Article Analyzer는 신규 기사마다 기본 1회 실행합니다.
+- Topic 후보가 없으면 Topic Matcher를 호출하지 않습니다.
+- 단일기사로 새 Topic을 만들 때는 Article Analyzer의 초기 Topic 분석값을 재사용하여 Topic Analyzer를 추가 호출하지 않습니다.
+- 기존 Topic에 새 기사가 합쳐지거나 관리자 EntityReview 처리로 Topic 관계가 실제 변경된 경우에만 Topic Analyzer 재분석을 수행합니다.
+- Article Analyzer의 반복 프롬프트는 Prompt Cache를 사용하고, 실제 cache hit가 없었던 Topic Matcher/Topic Analyzer는 불필요한 cache write가 발생하지 않도록 구성했습니다.
+
 ## 서비스 구성
 
 | 구성 | 포트 | 역할 |
 |---|---:|---|
-| Vue Frontend | 3000 | Topic Feed, 상세, 관심 게임 UI |
+| Vue Frontend | 3000(dev) / 80(prod) | Topic Feed, 상세, 관심 게임 및 관리자 UI |
 | API Gateway | 8080 | 외부 API 진입점 |
 | User Service | 8081 | 사용자 정보, 로그인, RS256 JWT 발급, JWKS |
 | News Service | 8082 | Game, NewsArticle, Topic 및 관계 관리 |
@@ -100,18 +112,15 @@ DELETE /api/interests/games/{gameId}
 GET    /api/admin/games
 GET    /api/admin/games/{id}
 PATCH  /api/admin/games/{id}
-POST   /api/admin/games/{id}/confirm
 POST   /api/admin/games/{id}/merge
-GET    /api/admin/games/{id}/review-context
-POST   /api/admin/games/{id}/reject
-POST   /api/admin/games/{id}/resolve-franchise
 POST   /api/admin/games/{id}/enrichment/preview
 POST   /api/admin/games/{id}/enrichment/apply
 
 GET    /api/admin/franchises
 GET    /api/admin/franchises/{id}
-POST   /api/admin/franchises
 PATCH  /api/admin/franchises/{id}
+POST   /api/admin/franchises/{id}/sync-igdb
+POST   /api/admin/franchises/{id}/merge
 POST   /api/admin/franchises/{id}/games
 PATCH  /api/admin/franchises/{id}/games/{gameId}
 DELETE /api/admin/franchises/{id}/games/{gameId}
@@ -119,6 +128,8 @@ DELETE /api/admin/franchises/{id}/games/{gameId}
 GET    /api/admin/entity-reviews?status=PENDING
 GET    /api/admin/entity-reviews/{id}
 POST   /api/admin/entity-reviews/{id}/resolve
+POST   /api/admin/entity-reviews/{id}/recheck
+POST   /api/admin/entity-reviews/{id}/reopen
 ```
 
 `/api/news/**`, `/api/collector/**`, 사용자 단건 조회, 일반 Game/Topic 쓰기 API는 Gateway에 노출하지 않습니다. Topic 생성과 Article/Game/Franchise 관계 반영은 Insight의 내부 Topic 통합 API가 담당하며 수동 Topic 쓰기 API는 두지 않습니다. Collector와 Insight는 Docker 내부 네트워크에서 News Service를 직접 호출합니다. 개발 중 운영용 API를 확인해야 할 때는 로컬 호스트의 개별 서비스 포트를 사용합니다. `/api/admin/**`는 `ADMIN` 역할만 접근할 수 있으며 Gateway와 News Service 양쪽에서 권한을 검사합니다.
@@ -204,11 +215,22 @@ confidence < 0.60
 
 AI는 기사에서 `SPECIFIC_GAME`, `FRANCHISE`, `UNNAMED_ENTRY`, `MIXED`, `NONE`을 구분합니다. 특정 작품이 명확할 때만 Game resolver를 사용하고, 프랜차이즈 전체 뉴스나 정식 제목이 공개되지 않은 차기작은 Franchise resolver를 사용합니다. 검토 큐에는 반대 타입 후보도 함께 보여주므로 관리자가 Game ↔ Franchise 판정을 바로잡을 수 있습니다.
 
-Game/Franchise 메타데이터는 IGDB를 기준 데이터로 보강합니다. 확정 Game은 IGDB metadata를 적용하고 연결 Franchise를 갱신합니다. Franchise가 확정되면 공식 `franchise.games` 목록을 기준으로 소속 Game catalog를 동기화합니다.
+Game/Franchise 메타데이터는 IGDB를 기준 데이터로 보강합니다. 확정 Game은 IGDB metadata를 적용하고, 기사 문맥에서 실제로 확인된 Game/Franchise 관계만 Article/Topic에 연결합니다. Franchise가 확정되었다고 해서 해당 Franchise의 전체 Game catalog를 자동으로 동기화하지 않습니다.
 
-IGDB Franchise catalog sync는 소속 Game을 일괄 조회해 `igdbId` 기준으로 기존 Game을 재사용하고 없는 Game은 `registrationSource=IGDB`, `reviewStatus=CONFIRMED`로 생성합니다. Game에는 canonical name, aliases, publisher/developer, genre/platform/image뿐 아니라 IGDB `game_type`, `version_parent`도 보존합니다. `GameFranchise`는 `MANUAL | IGDB` 관계 출처를 구분하며, 재동기화 시 IGDB가 만든 관계만 공식 목록과 비교해 stale relation을 제거하고 수동 관계는 보호합니다.
+Franchise identity는 IGDB의 서로 다른 두 namespace를 분리해 보존합니다.
 
-관리자 `/admin/franchises`는 Franchise별 소속 Game, 관련 Article/Topic, 유사 Franchise, IGDB 동기화 시각을 검토할 수 있고 수동 재동기화 및 Franchise 병합을 지원합니다. `/admin/reviews`는 자동확정이 불가능했던 기사 엔티티만 처리합니다.
+```text
+IGDB /franchises  → franchises.igdb_id
+IGDB /collections → franchises.igdb_collection_id  # Series
+```
+
+`igdb_id`와 `igdb_collection_id`는 서로 다른 endpoint의 ID이므로 하나의 ID로 합치지 않습니다. Franchise resolver는 Local exact → IGDB Franchise exact → IGDB Collection exact 순으로 확인하고, 필요한 경우에만 fuzzy/Game 역참조 후보를 사용합니다. 특정 작품(`SPECIFIC_GAME`) 기사에서는 불필요한 Franchise/Collection 조회를 추가하지 않습니다.
+
+전체 Franchise Game catalog가 실제로 필요할 때만 관리자 `/admin/franchises`의 `sync-igdb`를 수동 실행합니다. 이 동기화는 소속 Game을 일괄 조회해 `igdbId` 기준으로 기존 Game을 재사용하고 없는 Game은 `registrationSource=IGDB`, `reviewStatus=CONFIRMED`로 생성합니다. `GameFranchise`는 `MANUAL | IGDB` 관계 출처를 구분하며, 재동기화 시 IGDB가 만든 관계만 공식 목록과 비교해 stale relation을 제거하고 수동 관계는 보호합니다.
+
+관리자 `/admin/franchises`는 Franchise별 소속 Game, 관련 Article/Topic, 유사 Franchise, IGDB 동기화 시각을 검토할 수 있고 수동 재동기화 및 Franchise 병합을 지원합니다. `/admin/games`, `/admin/franchises`, `/admin/reviews`에는 일반 텍스트 검색과 별도로 IGDB ID exact 검색을 제공합니다. `/admin/reviews`에서는 최신 후보 재조회(`recheck`), 검토 재개(`reopen`), Game/Franchise/관련 없음 수동 확정을 지원합니다.
+
+AI가 부모 게임의 전체 부제와 Expansion/DLC명을 합쳐 추출해 IGDB 후보가 0건이 되는 경우에는 review-only 이름 축약 fallback을 사용합니다. 이 fallback 후보만으로 자동 연결하지 않고 관리자 검토 후보로만 노출합니다.
 
 ## 실행 전 준비
 
@@ -238,6 +260,8 @@ cp insight-service/.env.example insight-service/.env
 docker compose build
 docker compose up -d
 ```
+
+로컬 개발은 기본 `docker-compose.yml`을 사용합니다. 운영형 Vue/Nginx까지 포함한 배포 직전 검증은 base compose에 `docker-compose.prod.yml`을 overlay합니다. 실제 서버 배포 절차와 필수 환경변수/체크리스트는 [`DEPLOYMENT.md`](./DEPLOYMENT.md)를 기준으로 합니다.
 
 완전 재빌드가 필요할 때만:
 
@@ -357,12 +381,13 @@ API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `in
 
 현재 자체 서비스 패키지는 `com.gamenews.*`, DB는 `game_news_db`, Docker 네트워크는 `game-news-net`, 인증은 User Service 기반 자체 RS256 JWT 구조를 사용합니다.
 
-### IGDB-first Game identity
+### IGDB-first Game / Franchise identity
 
 - `Game.igdbId`가 IGDB 카탈로그 Game의 고유 식별자다.
 - `Game.name`은 표시/검색용이므로 서로 다른 IGDB ID가 같은 이름을 가져도 저장할 수 있다.
-- Franchise catalog sync는 `franchise.games`를 기준으로 Game을 upsert하고 `GameFranchise`를 동기화한다.
 - 동일 이름의 IGDB Game이 여러 개여도 canonical exact match 중 `Main Game`이 하나뿐이면 일반 기사에는 Main Game을 우선한다.
 - 기사 문맥이 Remaster/Remake/Port/Expansion/DLC/Pack을 명시하면 해당 IGDB `game_type`과 일치하는 후보만 자동 선택하며, 그래도 복수면 관리자 검토로 남긴다.
-- ArticleGame/TopicGame에는 실제 기사에서 판별된 Game만 연결하며 Franchise 카탈로그 전체를 전파하지 않는다.
+- `Franchise.igdbId`는 IGDB `/franchises`, `Franchise.igdbCollectionId`는 IGDB `/collections`(Series)의 식별자를 각각 보존한다.
+- Franchise 전체 Game catalog는 자동 확장하지 않으며 관리자 수동 `sync-igdb`가 실행된 경우에만 `GameFranchise`를 동기화한다.
+- ArticleGame/TopicGame 및 ArticleFranchise/TopicFranchise에는 실제 기사에서 판별된 엔티티만 연결하며 Franchise 카탈로그 전체를 전파하지 않는다.
 
