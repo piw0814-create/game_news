@@ -7,7 +7,6 @@ from app.config.settings import settings
 from app.model.schemas import (
     AnalysisStatus,
     ArticleAnalysisResult,
-    ArticleEntityType,
     ArticleFranchiseResponse,
     ArticleGameResponse,
     FranchiseResponse,
@@ -191,27 +190,6 @@ class NewsServiceClient:
         )
         return NewsArticleResponse.model_validate(data)
 
-    def update_analysis(
-        self,
-        article_id: int,
-        summary: str,
-        category: NewsCategory,
-        keywords: List[str],
-        game_news_relevant: bool,
-        entity_type: ArticleEntityType,
-    ) -> NewsArticleResponse:
-        data = self._request(
-            "PUT",
-            f"/api/news/{article_id}/analysis",
-            json={
-                "summary": summary,
-                "category": category.value,
-                "keywords": keywords,
-                "gameNewsRelevant": game_news_relevant,
-                "entityType": entity_type.value,
-            },
-        )
-        return NewsArticleResponse.model_validate(data)
 
     def link_game(
         self,

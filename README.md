@@ -58,6 +58,7 @@ Vue Topic Feed
 - 단일기사로 새 Topic을 만들 때는 Article Analyzer의 초기 Topic 분석값을 재사용하여 Topic Analyzer를 추가 호출하지 않습니다.
 - 기존 Topic에 새 기사가 합쳐지거나 관리자 EntityReview 처리로 Topic 관계가 실제 변경된 경우에만 Topic Analyzer 재분석을 수행합니다.
 - Article Analyzer의 반복 프롬프트는 Prompt Cache를 사용하고, 실제 cache hit가 없었던 Topic Matcher/Topic Analyzer는 불필요한 cache write가 발생하지 않도록 구성했습니다.
+- Article Analyzer, Topic Matcher, Topic Analyzer는 기사/Topic 제목·요약·메타데이터를 모두 신뢰할 수 없는 외부 또는 파생 데이터로 취급합니다. 데이터 내부의 명령문·역할 변경·출력 형식 변경 요청은 실행하지 않고 분석 근거로만 사용합니다.
 
 ## 서비스 구성
 
@@ -187,7 +188,7 @@ Xbox Wire / PlayStation Blog
 
 기본 자동 수집은 출처별 최대 10건씩 10분 간격으로 실행합니다. Collector 재기동 시에는 출처별 DB 최신 `publishedAt`을 기준선으로 삼아 RSS에서 최대 50건까지 확인하고, 기준선 이후 후보만 URL 중복 검사를 거쳐 저장합니다. 기준선이 없는 초기 수집은 과거 전체를 채우지 않고 일반 수집과 동일하게 최신 10건만 저장합니다.
 
-Insight Service는 `news.created`를 기사 1건씩 처리하고, 시작 시 `PENDING`, `FAILED`, 오래된 `PROCESSING` 기사를 복구합니다. Topic 동일사건 판단 AI 응답을 파싱하지 못하는 경우에는 기사 전체를 실패시키지 않고 새 Topic 생성으로 fallback합니다.
+Insight Service는 `news.created`를 기사 1건씩 처리합니다. 시작 시 `PENDING`, `FAILED`, `ANALYZED`, `TOPIC_PENDING`과 오래된 `PROCESSING` 기사를 복구하고, 주기 복구에서는 오래된 `PENDING`/`PROCESSING`/`ANALYZED`/`TOPIC_PENDING` 및 `FAILED`를 다시 확인합니다. `ANALYZED`와 `TOPIC_PENDING`은 저장된 Article Analyzer 체크포인트를 재사용하므로 Article AI를 다시 호출하지 않습니다. Topic Matcher가 기술적으로 실패하거나 Structured Output을 파싱하지 못하면 새 Topic을 생성하지 않고 `TOPIC_PENDING` 상태를 유지해 다음 Recovery에서 동일 단계부터 재개합니다.
 
 ## IGDB-first 엔티티 자동확정 / 관리자 검토
 
@@ -226,7 +227,7 @@ IGDB /collections → franchises.igdb_collection_id  # Series
 
 `igdb_id`와 `igdb_collection_id`는 서로 다른 endpoint의 ID이므로 하나의 ID로 합치지 않습니다. Franchise resolver는 Local exact → IGDB Franchise exact → IGDB Collection exact 순으로 확인하고, 필요한 경우에만 fuzzy/Game 역참조 후보를 사용합니다. 특정 작품(`SPECIFIC_GAME`) 기사에서는 불필요한 Franchise/Collection 조회를 추가하지 않습니다.
 
-전체 Franchise Game catalog가 실제로 필요할 때만 관리자 `/admin/franchises`의 `sync-igdb`를 수동 실행합니다. 이 동기화는 소속 Game을 일괄 조회해 `igdbId` 기준으로 기존 Game을 재사용하고 없는 Game은 `registrationSource=IGDB`, `reviewStatus=CONFIRMED`로 생성합니다. `GameFranchise`는 `MANUAL | IGDB` 관계 출처를 구분하며, 재동기화 시 IGDB가 만든 관계만 공식 목록과 비교해 stale relation을 제거하고 수동 관계는 보호합니다.
+전체 Franchise Game catalog가 실제로 필요할 때만 관리자 `/admin/franchises`의 `sync-igdb`를 수동 실행합니다. 이 동기화는 소속 Game을 일괄 조회해 `igdbId` 기준으로 기존 Game을 재사용하고 없는 Game은 `registrationSource=IGDB`로 생성합니다. `GameFranchise`는 `MANUAL | IGDB` 관계 출처를 구분하며, 재동기화 시 IGDB가 만든 관계만 공식 목록과 비교해 stale relation을 제거하고 수동 관계는 보호합니다.
 
 관리자 `/admin/franchises`는 Franchise별 소속 Game, 관련 Article/Topic, 유사 Franchise, IGDB 동기화 시각을 검토할 수 있고 수동 재동기화 및 Franchise 병합을 지원합니다. `/admin/games`, `/admin/franchises`, `/admin/reviews`에는 일반 텍스트 검색과 별도로 IGDB ID exact 검색을 제공합니다. `/admin/reviews`에서는 최신 후보 재조회(`recheck`), 검토 재개(`reopen`), Game/Franchise/관련 없음 수동 확정을 지원합니다.
 

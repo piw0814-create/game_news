@@ -184,24 +184,6 @@ public class NewsService {
         return checkpoint;
     }
 
-    @Transactional
-    public NewsArticleDto.NewsArticleResponse updateAnalysis(
-            Long id,
-            NewsArticleDto.AnalysisUpdateRequest request) {
-        NewsArticle article = findNewsById(id);
-
-        String summary = request.getSummary().trim();
-        List<String> normalizedKeywords = normalizeKeywords(request.getKeywords());
-        String keywordsJson = toJson(normalizedKeywords);
-
-        article.completeAnalysis(
-                summary,
-                request.getCategory(),
-                keywordsJson,
-                request.getGameNewsRelevant(),
-                request.getEntityType());
-        return NewsArticleDto.NewsArticleResponse.from(article);
-    }
 
     private boolean existsLegacyCanonicalDuplicate(String canonicalUrl) {
         return newsArticleRepository.findAllByCanonicalUrlIsNullOrderByIdAsc().stream()

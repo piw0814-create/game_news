@@ -66,28 +66,6 @@ public class NewsArticleDto {
         private AnalysisStatus status;
     }
 
-    @Getter
-    @NoArgsConstructor
-    @AllArgsConstructor
-    @Builder
-    public static class AnalysisUpdateRequest {
-
-        @NotBlank(message = "기사 요약은 필수입니다")
-        private String summary;
-
-        @NotNull(message = "기사 카테고리는 필수입니다")
-        private NewsCategory category;
-
-        @NotNull(message = "키워드 목록은 필수입니다")
-        @Size(max = 10, message = "키워드는 최대 10개까지 저장할 수 있습니다")
-        private List<@Valid @NotBlank(message = "빈 키워드는 저장할 수 없습니다") String> keywords;
-
-        @NotNull(message = "게임 뉴스 관련성 판단은 필수입니다")
-        private Boolean gameNewsRelevant;
-
-        @NotNull(message = "기사 엔티티 유형은 필수입니다")
-        private ArticleEntityType entityType;
-    }
 
     /**
      * Article Analyzer 결과를 파이프라인 중간 체크포인트로 저장한다.

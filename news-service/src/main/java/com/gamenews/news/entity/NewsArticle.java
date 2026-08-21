@@ -157,18 +157,4 @@ public class NewsArticle {
         this.analysisStatus = AnalysisStatus.COMPLETED;
     }
 
-    /** 기존 API 호환용. */
-    public void completeAnalysis(
-            String summary,
-            NewsCategory category,
-            String keywords,
-            Boolean gameNewsRelevant,
-            ArticleEntityType entityType) {
-        this.summary = summary;
-        this.category = category;
-        this.keywords = keywords;
-        this.gameNewsRelevant = gameNewsRelevant;
-        this.entityType = entityType;
-        this.analysisStatus = AnalysisStatus.COMPLETED;
-    }
 }
