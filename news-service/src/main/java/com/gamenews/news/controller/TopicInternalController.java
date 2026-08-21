@@ -33,6 +33,13 @@ public class TopicInternalController {
         return ResponseEntity.ok(ApiResponse.success(topicIntegrationService.getCandidates(request)));
     }
 
+    @GetMapping("/by-article/{articleId}")
+    public ResponseEntity<ApiResponse<TopicIntegrationDto.IntegrateResponse>> getExistingIntegration(
+            @PathVariable Long articleId) {
+        return ResponseEntity.ok(ApiResponse.success(
+                topicIntegrationService.getExistingIntegration(articleId)));
+    }
+
     @PostMapping("/integrate")
     public ResponseEntity<ApiResponse<TopicIntegrationDto.IntegrateResponse>> integrate(
             @Valid @RequestBody TopicIntegrationDto.IntegrateRequest request) {

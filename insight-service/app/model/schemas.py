@@ -18,6 +18,8 @@ class NewsCategory(str, Enum):
 class AnalysisStatus(str, Enum):
     PENDING = "PENDING"
     PROCESSING = "PROCESSING"
+    ANALYZED = "ANALYZED"
+    TOPIC_PENDING = "TOPIC_PENDING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
@@ -44,6 +46,9 @@ class NewsArticleResponse(BaseModel):
     category: Optional[NewsCategory] = None
     gameNewsRelevant: Optional[bool] = None
     entityType: Optional[ArticleEntityType] = None
+    initialTopicTitle: Optional[str] = None
+    semanticImportanceScore: Optional[int] = None
+    initialWhyImportant: Optional[str] = None
     analysisStatus: AnalysisStatus
     createdAt: Optional[datetime] = None
     updatedAt: Optional[datetime] = None

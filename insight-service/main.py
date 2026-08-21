@@ -76,6 +76,16 @@ async def health():
     }
 
 
+@app.get("/api/admin/operations/insight")
+async def insight_operations():
+    return {
+        "status": "UP",
+        "service": settings.app_name,
+        "consumer": news_created_consumer.get_operational_status(),
+        "recovery": article_recovery_service.get_operational_status(),
+    }
+
+
 if __name__ == "__main__":
     import uvicorn
 

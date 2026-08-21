@@ -6,6 +6,7 @@ import httpx
 from app.config.settings import settings
 from app.model.schemas import (
     AnalysisStatus,
+    ArticleAnalysisResult,
     ArticleEntityType,
     ArticleFranchiseResponse,
     ArticleGameResponse,
@@ -144,6 +145,40 @@ class NewsServiceClient:
         )
         return ArticleFranchiseResponse.model_validate(data)
 
+
+    def save_analysis_checkpoint(
+        self,
+        article_id: int,
+        analysis: ArticleAnalysisResult,
+    ) -> NewsArticleResponse:
+        data = self._request(
+            "PUT",
+            f"/api/internal/news/{article_id}/analysis-checkpoint",
+            json={
+                "summary": analysis.summary,
+                "category": analysis.category.value,
+                "keywords": analysis.keywords,
+                "gameNewsRelevant": analysis.gameNewsRelevant,
+                "entityType": analysis.entityType.value,
+                "initialTopicTitle": analysis.topicTitle,
+                "semanticImportanceScore": analysis.semanticImportanceScore,
+                "initialWhyImportant": analysis.whyImportant,
+                "analysisPayload": analysis.model_dump_json(),
+            },
+        )
+        return NewsArticleResponse.model_validate(data)
+
+    def get_analysis_checkpoint(self, article_id: int) -> ArticleAnalysisResult:
+        data = self._request(
+            "GET",
+            f"/api/internal/news/{article_id}/analysis-checkpoint",
+        )
+        if not isinstance(data, str) or not data.strip():
+            raise NewsServiceError(
+                f"기사 분석 체크포인트가 비어 있습니다: articleId={article_id}"
+            )
+        return ArticleAnalysisResult.model_validate_json(data)
+
     def update_analysis_status(
         self,
         article_id: int,
@@ -197,6 +232,18 @@ class NewsServiceClient:
             },
         )
         return ArticleGameResponse.model_validate(data)
+
+    def get_existing_topic_integration(
+        self,
+        article_id: int,
+    ) -> TopicIntegrationResponse | None:
+        data = self._request(
+            "GET",
+            f"/api/internal/topics/by-article/{article_id}",
+        )
+        if data is None:
+            return None
+        return TopicIntegrationResponse.model_validate(data)
 
     def get_topic_candidates(
         self,

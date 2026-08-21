@@ -62,6 +62,14 @@ class ArticleRecoveryService:
             thread.join(timeout=2.0)
         self._periodic_thread = None
 
+    def get_operational_status(self) -> dict:
+        thread = self._periodic_thread
+        return {
+            "alive": bool(thread and thread.is_alive()),
+            "enabled": settings.analysis_recovery_enabled,
+            "periodicEnabled": settings.analysis_recovery_periodic_enabled,
+        }
+
     def _periodic_loop(self) -> None:
         interval = max(60, settings.analysis_recovery_periodic_interval_seconds)
         while not self._stop_event.wait(interval):

@@ -27,6 +27,11 @@ class Settings(BaseSettings):
     kafka_consumer_group_id: str = "insight-service"
     kafka_topic_news_created: str = "news.created"
     kafka_retry_delay_seconds: float = 5.0
+    kafka_reconnect_initial_delay_seconds: float = 1.0
+    kafka_reconnect_max_delay_seconds: float = 30.0
+    kafka_dlq_enabled: bool = True
+    kafka_dlq_topic: str = "news.created.dlq"
+    kafka_dlq_send_timeout_seconds: float = 5.0
 
     # 재시작 시 미완료 기사 복구
     analysis_recovery_enabled: bool = True

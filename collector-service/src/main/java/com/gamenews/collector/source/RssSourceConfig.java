@@ -16,6 +16,7 @@ public class RssSourceConfig {
 
     private Schedule schedule = new Schedule();
     private StartupCatchup startupCatchup = new StartupCatchup();
+    private Http http = new Http();
     private Map<String, Source> sources = new LinkedHashMap<>();
 
     public Source getRequiredSource(String sourceKey) {
@@ -39,6 +40,15 @@ public class RssSourceConfig {
     public static class StartupCatchup {
         private boolean enabled = true;
         private int limit = 50;
+    }
+
+
+    @Getter
+    @Setter
+    public static class Http {
+        private int connectTimeoutMs = 3_000;
+        private long rssTimeoutSeconds = 15;
+        private long newsTimeoutSeconds = 5;
     }
 
     @Getter

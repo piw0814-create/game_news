@@ -1,6 +1,7 @@
 package com.gamenews.collector.scheduler;
 
 import com.gamenews.collector.dto.CollectorDto;
+import com.gamenews.collector.service.CollectorOperationalService;
 import com.gamenews.collector.service.CollectorService;
 import com.gamenews.collector.source.RssSourceConfig;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +20,7 @@ public class RssCollectorScheduler {
 
     private final CollectorService collectorService;
     private final RssSourceConfig sourceConfig;
+    private final CollectorOperationalService operationalService;
     private final Set<String> startupCatchupCompletedSources = ConcurrentHashMap.newKeySet();
 
     @Scheduled(
@@ -51,10 +53,14 @@ public class RssCollectorScheduler {
                         sourceKey, source.getName(), limit);
             }
 
+            operationalService.recordAttempt(sourceKey);
+
             try {
                 CollectorDto.CollectionResult result = startupCatchup
                         ? collectorService.collectStartupCatchup(sourceKey, limit)
                         : collectorService.collectScheduled(sourceKey, limit);
+
+                operationalService.recordSuccess(sourceKey, result);
 
                 if (startupCatchup) {
                     handleStartupCatchupResult(sourceKey, result);
@@ -69,6 +75,7 @@ public class RssCollectorScheduler {
                     );
                 }
             } catch (Exception e) {
+                operationalService.recordFailure(sourceKey, e);
                 if (startupCatchup) {
                     log.error("[RssCollectorScheduler] startup catch-up 실패 - key={}, source={}, error={}",
                             sourceKey, source.getName(), e.getMessage(), e);

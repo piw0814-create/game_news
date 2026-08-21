@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
 import java.io.ByteArrayInputStream;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.Date;
@@ -26,6 +27,7 @@ public class GenericRssClient {
     private static final String ACCEPT = "application/rss+xml, application/xml, text/xml, */*";
 
     private final WebClient.Builder webClientBuilder;
+    private final RssSourceConfig sourceConfig;
 
     public List<RssArticle> fetchLatest(RssSourceConfig.Source source, int limit) {
         validateSource(source);
@@ -38,6 +40,7 @@ public class GenericRssClient {
                     .header(HttpHeaders.ACCEPT, ACCEPT)
                     .retrieve()
                     .bodyToMono(byte[].class)
+                    .timeout(Duration.ofSeconds(sourceConfig.getHttp().getRssTimeoutSeconds()))
                     .block();
 
             if (rssBytes == null || rssBytes.length == 0) {

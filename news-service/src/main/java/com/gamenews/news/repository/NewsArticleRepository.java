@@ -15,10 +15,32 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
 
     boolean existsByUrl(String url);
 
+    boolean existsByCanonicalUrl(String canonicalUrl);
+
+    List<NewsArticle> findAllByCanonicalUrlIsNullOrderByIdAsc();
+
+    List<NewsArticle> findAllByCanonicalUrlIsNotNullOrderByIdAsc();
+
+    List<NewsArticle> findAllByContentIsNotNullOrderByIdAsc();
+
     List<NewsArticle> findAllByOrderByCreatedAtDesc();
 
     Optional<NewsArticle> findTopBySourceNameAndPublishedAtIsNotNullOrderByPublishedAtDescIdDesc(
             String sourceName);
+
+    long countByAnalysisStatus(AnalysisStatus analysisStatus);
+
+    long countByAnalysisStatusAndUpdatedAtBefore(
+            AnalysisStatus analysisStatus,
+            LocalDateTime updatedAt);
+
+    @Query("""
+            SELECT MIN(article.updatedAt)
+            FROM NewsArticle article
+            WHERE article.analysisStatus = :analysisStatus
+            """)
+    LocalDateTime findOldestUpdatedAtByAnalysisStatus(
+            @Param("analysisStatus") AnalysisStatus analysisStatus);
 
     @Query("""
             SELECT article
@@ -27,6 +49,8 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
               AND (
                     article.analysisStatus = :pendingStatus
                     OR article.analysisStatus = :failedStatus
+                    OR article.analysisStatus = :analyzedStatus
+                    OR article.analysisStatus = :topicPendingStatus
                     OR (
                         article.analysisStatus = :processingStatus
                         AND article.updatedAt < :processingStaleBefore
@@ -38,6 +62,8 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
             @Param("pendingStatus") AnalysisStatus pendingStatus,
             @Param("failedStatus") AnalysisStatus failedStatus,
             @Param("processingStatus") AnalysisStatus processingStatus,
+            @Param("analyzedStatus") AnalysisStatus analyzedStatus,
+            @Param("topicPendingStatus") AnalysisStatus topicPendingStatus,
             @Param("processingStaleBefore") LocalDateTime processingStaleBefore,
             @Param("excludedIds") List<Long> excludedIds,
             Pageable pageable);
@@ -53,7 +79,11 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
                         AND article.updatedAt < :pendingStaleBefore
                     )
                     OR (
-                        article.analysisStatus = :processingStatus
+                        (
+                            article.analysisStatus = :processingStatus
+                            OR article.analysisStatus = :analyzedStatus
+                            OR article.analysisStatus = :topicPendingStatus
+                        )
                         AND article.updatedAt < :processingStaleBefore
                     )
               )
@@ -63,6 +93,8 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
             @Param("pendingStatus") AnalysisStatus pendingStatus,
             @Param("failedStatus") AnalysisStatus failedStatus,
             @Param("processingStatus") AnalysisStatus processingStatus,
+            @Param("analyzedStatus") AnalysisStatus analyzedStatus,
+            @Param("topicPendingStatus") AnalysisStatus topicPendingStatus,
             @Param("pendingStaleBefore") LocalDateTime pendingStaleBefore,
             @Param("processingStaleBefore") LocalDateTime processingStaleBefore,
             @Param("excludedIds") List<Long> excludedIds,

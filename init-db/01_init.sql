@@ -88,6 +88,7 @@ CREATE TABLE IF NOT EXISTS news_articles (
     id               BIGINT          NOT NULL AUTO_INCREMENT,
     title            VARCHAR(500)    NOT NULL,
     url              VARCHAR(768)    NOT NULL UNIQUE,
+    canonical_url    VARCHAR(768)    NULL,
     source_name      VARCHAR(255)    NOT NULL,
     source_type      VARCHAR(20)     NOT NULL COMMENT 'OFFICIAL | MEDIA | COMMUNITY',
     published_at     DATETIME(6),
@@ -101,7 +102,8 @@ CREATE TABLE IF NOT EXISTS news_articles (
     analysis_status  VARCHAR(20)     NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING | PROCESSING | COMPLETED | FAILED',
     created_at       DATETIME(6)     NOT NULL,
     updated_at       DATETIME(6)     NOT NULL,
-    PRIMARY KEY (id)
+    PRIMARY KEY (id),
+    UNIQUE KEY uq_news_articles_canonical_url (canonical_url)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
 -- 여러 기사가 가리키는 하나의 실제 사건

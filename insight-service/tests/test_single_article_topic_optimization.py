@@ -45,6 +45,7 @@ def _analysis(with_initial: bool = True) -> ArticleAnalysisResult:
 def test_new_topic_receives_initial_article_ai_analysis(monkeypatch):
     captured = {}
 
+    monkeypatch.setattr(integration_module.news_client, "get_existing_topic_integration", lambda article_id: None)
     monkeypatch.setattr(integration_module.news_client, "get_topic_candidates", lambda **kwargs: [])
 
     def fake_integrate_topic(**kwargs):
@@ -69,6 +70,7 @@ def test_new_topic_receives_initial_article_ai_analysis(monkeypatch):
 
 def test_missing_initial_topic_fields_falls_back_to_article_title(monkeypatch):
     captured = {}
+    monkeypatch.setattr(integration_module.news_client, "get_existing_topic_integration", lambda article_id: None)
     monkeypatch.setattr(integration_module.news_client, "get_topic_candidates", lambda **kwargs: [])
 
     def fake_integrate_topic(**kwargs):
@@ -114,8 +116,12 @@ def test_process_skips_topic_analyzer_for_new_topic_with_complete_initial_analys
 
     fake_news = SimpleNamespace(
         get_news=lambda article_id: article,
-        update_analysis_status=lambda article_id, status: None,
-        update_analysis=lambda **kwargs: SimpleNamespace(analysisStatus=AnalysisStatus.COMPLETED),
+        save_analysis_checkpoint=lambda article_id, analysis: article.model_copy(
+            update={"analysisStatus": AnalysisStatus.ANALYZED}
+        ),
+        update_analysis_status=lambda article_id, status: article.model_copy(
+            update={"analysisStatus": status}
+        ),
     )
     monkeypatch.setattr(article_module, "news_client", fake_news)
     monkeypatch.setattr(article_module.openai_article_analyzer, "analyze", lambda value: analysis)
@@ -151,8 +157,12 @@ def test_process_falls_back_to_topic_analyzer_when_initial_fields_are_missing(mo
 
     fake_news = SimpleNamespace(
         get_news=lambda article_id: article,
-        update_analysis_status=lambda article_id, status: None,
-        update_analysis=lambda **kwargs: SimpleNamespace(analysisStatus=AnalysisStatus.COMPLETED),
+        save_analysis_checkpoint=lambda article_id, analysis: article.model_copy(
+            update={"analysisStatus": AnalysisStatus.ANALYZED}
+        ),
+        update_analysis_status=lambda article_id, status: article.model_copy(
+            update={"analysisStatus": status}
+        ),
     )
     monkeypatch.setattr(article_module, "news_client", fake_news)
     monkeypatch.setattr(article_module.openai_article_analyzer, "analyze", lambda value: analysis)

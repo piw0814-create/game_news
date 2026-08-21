@@ -27,6 +27,15 @@ class TopicIntegrationService:
         initial_importance_score: int | None = None,
         initial_why_important: str | None = None,
     ) -> TopicIntegrationResponse:
+        existing = news_client.get_existing_topic_integration(article.id)
+        if existing is not None:
+            logger.info(
+                "[TopicIntegration] 이미 Topic 연결된 기사 - Matcher 생략 - articleId=%s topicId=%s",
+                article.id,
+                existing.topicId,
+            )
+            return existing
+
         allow_recent_fallback = analysis.entityType == ArticleEntityType.NONE
         candidates = news_client.get_topic_candidates(
             article_id=article.id,
@@ -61,18 +70,14 @@ class TopicIntegrationService:
         try:
             match = openai_topic_matcher.match(article, analysis, ai_candidates)
         except Exception as exc:
+            # 기술적 장애를 "다른 사건"으로 해석해 새 Topic을 만들면 데이터가 오염된다.
+            # 호출자가 TOPIC_PENDING 체크포인트를 유지한 채 나중에 Matcher부터 재개한다.
             logger.warning(
-                "[TopicIntegration] AI matcher 실패 - 새 Topic fallback - articleId=%s error=%s",
+                "[TopicIntegration] AI matcher 실패 - Topic 생성 보류 - articleId=%s error=%s",
                 article.id,
                 exc,
             )
-            return self._create_new_topic(
-                article,
-                analysis,
-                f"AI matcher failure fallback - {type(exc).__name__}",
-                initial_importance_score,
-                initial_why_important,
-            )
+            raise
 
         candidate_ids = {candidate.id for candidate in ai_candidates}
 

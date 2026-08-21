@@ -7,8 +7,11 @@ import com.gamenews.news.entity.NewsArticle;
 import com.gamenews.news.enums.AnalysisStatus;
 import com.gamenews.news.kafka.NewsCreatedEvent;
 import com.gamenews.news.repository.NewsArticleRepository;
+import com.gamenews.news.util.ArticleContentSanitizer;
+import com.gamenews.news.util.UrlCanonicalizer;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,30 +30,41 @@ public class NewsService {
     private final NewsArticleRepository newsArticleRepository;
     private final ApplicationEventPublisher eventPublisher;
     private final ObjectMapper objectMapper;
+    private final UrlCanonicalizer urlCanonicalizer;
+    private final ArticleContentSanitizer articleContentSanitizer;
 
     @Transactional
     public NewsArticleDto.NewsArticleResponse createNews(NewsArticleDto.CreateRequest request) {
         String normalizedTitle = request.getTitle().trim();
         String normalizedUrl = request.getUrl().trim();
         String normalizedSourceName = request.getSourceName().trim();
+        String canonicalUrl = urlCanonicalizer.canonicalize(normalizedUrl);
 
-        if (newsArticleRepository.existsByUrl(normalizedUrl)) {
+        if (newsArticleRepository.existsByUrl(normalizedUrl)
+                || newsArticleRepository.existsByCanonicalUrl(canonicalUrl)
+                || existsLegacyCanonicalDuplicate(canonicalUrl)) {
             throw new IllegalArgumentException("이미 등록된 기사입니다: " + normalizedUrl);
         }
 
         NewsArticle article = NewsArticle.builder()
                 .title(normalizedTitle)
                 .url(normalizedUrl)
+                .canonicalUrl(canonicalUrl)
                 .sourceName(normalizedSourceName)
                 .sourceType(request.getSourceType())
                 .publishedAt(request.getPublishedAt())
                 .collectedAt(LocalDateTime.now(ZoneOffset.UTC))
-                .content(trimToNull(request.getContent()))
+                .content(articleContentSanitizer.sanitize(request.getContent()))
                 .category(request.getCategory())
                 .analysisStatus(AnalysisStatus.PENDING)
                 .build();
 
-        NewsArticle savedArticle = newsArticleRepository.save(article);
+        NewsArticle savedArticle;
+        try {
+            savedArticle = newsArticleRepository.saveAndFlush(article);
+        } catch (DataIntegrityViolationException e) {
+            throw new IllegalArgumentException("이미 등록된 기사입니다: " + normalizedUrl, e);
+        }
         eventPublisher.publishEvent(new NewsCreatedEvent(savedArticle.getId()));
 
         return NewsArticleDto.NewsArticleResponse.from(savedArticle);
@@ -108,6 +122,8 @@ public class NewsService {
                         AnalysisStatus.PENDING,
                         AnalysisStatus.FAILED,
                         AnalysisStatus.PROCESSING,
+                        AnalysisStatus.ANALYZED,
+                        AnalysisStatus.TOPIC_PENDING,
                         processingStaleBefore,
                         normalizedExcludeIds,
                         PageRequest.of(0, normalizedLimit))
@@ -115,6 +131,8 @@ public class NewsService {
                         AnalysisStatus.PENDING,
                         AnalysisStatus.FAILED,
                         AnalysisStatus.PROCESSING,
+                        AnalysisStatus.ANALYZED,
+                        AnalysisStatus.TOPIC_PENDING,
                         pendingStaleBefore,
                         processingStaleBefore,
                         normalizedExcludeIds,
@@ -135,6 +153,38 @@ public class NewsService {
     }
 
     @Transactional
+    public NewsArticleDto.NewsArticleResponse saveAnalysisCheckpoint(
+            Long id,
+            NewsArticleDto.AnalysisCheckpointRequest request) {
+        NewsArticle article = findNewsById(id);
+
+        String summary = request.getSummary().trim();
+        List<String> normalizedKeywords = normalizeKeywords(request.getKeywords());
+        String keywordsJson = toJson(normalizedKeywords);
+
+        article.saveAnalysisCheckpoint(
+                summary,
+                request.getCategory(),
+                keywordsJson,
+                request.getGameNewsRelevant(),
+                request.getEntityType(),
+                trimToNull(request.getInitialTopicTitle()),
+                request.getSemanticImportanceScore(),
+                trimToNull(request.getInitialWhyImportant()),
+                request.getAnalysisPayload().trim());
+        return NewsArticleDto.NewsArticleResponse.from(article);
+    }
+
+    public String getAnalysisCheckpoint(Long id) {
+        NewsArticle article = findNewsById(id);
+        String checkpoint = trimToNull(article.getAnalysisCheckpoint());
+        if (checkpoint == null) {
+            throw new IllegalStateException("저장된 기사 분석 체크포인트가 없습니다: " + id);
+        }
+        return checkpoint;
+    }
+
+    @Transactional
     public NewsArticleDto.NewsArticleResponse updateAnalysis(
             Long id,
             NewsArticleDto.AnalysisUpdateRequest request) {
@@ -151,6 +201,13 @@ public class NewsService {
                 request.getGameNewsRelevant(),
                 request.getEntityType());
         return NewsArticleDto.NewsArticleResponse.from(article);
+    }
+
+    private boolean existsLegacyCanonicalDuplicate(String canonicalUrl) {
+        return newsArticleRepository.findAllByCanonicalUrlIsNullOrderByIdAsc().stream()
+                .map(NewsArticle::getUrl)
+                .map(urlCanonicalizer::canonicalize)
+                .anyMatch(canonicalUrl::equals);
     }
 
     private NewsArticle findNewsById(Long id) {

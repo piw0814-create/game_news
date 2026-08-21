@@ -22,6 +22,11 @@ collector:
     enabled: ${COLLECTOR_STARTUP_CATCHUP_ENABLED:true}
     limit: ${COLLECTOR_STARTUP_CATCHUP_LIMIT:50}
 
+  http:
+    connect-timeout-ms: ${COLLECTOR_HTTP_CONNECT_TIMEOUT_MS:3000}
+    rss-timeout-seconds: ${COLLECTOR_RSS_TIMEOUT_SECONDS:15}
+    news-timeout-seconds: ${COLLECTOR_NEWS_TIMEOUT_SECONDS:5}
+
   sources:
     pcgamer:
       name: PC Gamer

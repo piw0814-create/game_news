@@ -118,6 +118,15 @@ public class TopicIntegrationService {
                 .toList();
     }
 
+    public TopicIntegrationDto.IntegrateResponse getExistingIntegration(Long articleId) {
+        return topicArticleRepository.findByArticle_Id(articleId)
+                .map(link -> TopicIntegrationDto.IntegrateResponse.builder()
+                        .topicId(link.getTopic().getId())
+                        .action(TopicIntegrationDto.IntegrationAction.ALREADY_LINKED)
+                        .build())
+                .orElse(null);
+    }
+
     @Transactional
     public TopicIntegrationDto.IntegrateResponse integrate(
             TopicIntegrationDto.IntegrateRequest request) {

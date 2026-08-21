@@ -32,8 +32,24 @@ spring:
             - Path=/api/users/me
             - Method=GET
 
-        # Admin - 관리자 전용 API (세부 권한은 SecurityConfig에서 ADMIN 검사)
+        # Admin operations - 파이프라인 상태는 각 소유 서비스로 직접 라우팅
+        - id: admin-collector-operations
+          order: -30
+          uri: lb://collector-service
+          predicates:
+            - Path=/api/admin/operations/collector
+            - Method=GET
+
+        - id: admin-insight-operations
+          order: -20
+          uri: lb://insight-service
+          predicates:
+            - Path=/api/admin/operations/insight
+            - Method=GET
+
+        # Admin - 나머지 관리자 API는 News Service가 제공한다.
         - id: admin-api
+          order: 0
           uri: lb://news-service
           predicates:
             - Path=/api/admin/**

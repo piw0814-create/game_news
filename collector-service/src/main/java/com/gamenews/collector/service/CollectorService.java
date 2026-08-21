@@ -2,6 +2,7 @@ package com.gamenews.collector.service;
 
 import com.gamenews.collector.client.NewsServiceClient;
 import com.gamenews.collector.dto.CollectorDto;
+import com.gamenews.collector.exception.NewsServiceUnavailableException;
 import com.gamenews.collector.source.GenericRssClient;
 import com.gamenews.collector.source.RssArticle;
 import com.gamenews.collector.source.RssSourceConfig;
@@ -138,6 +139,15 @@ public class CollectorService {
                 } else {
                     skipped++;
                 }
+            } catch (NewsServiceUnavailableException e) {
+                log.error(
+                        "[Collector] News Service 통신 실패 - source: {}, title: {}, url: {}, error: {} - 현재 source 수집 중단",
+                        source.getName(),
+                        article.getTitle(),
+                        article.getUrl(),
+                        e.getMessage()
+                );
+                throw e;
             } catch (Exception e) {
                 failed++;
                 log.warn("[Collector] 기사 처리 실패 - source: {}, title: {}, url: {}, error: {}",

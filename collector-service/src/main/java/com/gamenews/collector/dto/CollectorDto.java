@@ -38,6 +38,34 @@ public class CollectorDto {
     @NoArgsConstructor
     @AllArgsConstructor
     @Builder
+    public static class OperationalStatus {
+        private String status;
+        private boolean scheduleEnabled;
+        private LocalDateTime generatedAt;
+        private java.util.List<SourceOperationalStatus> sources;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
+    public static class SourceOperationalStatus {
+        private String key;
+        private String name;
+        private boolean enabled;
+        private LocalDateTime lastAttemptAt;
+        private LocalDateTime lastSuccessAt;
+        private int fetched;
+        private int saved;
+        private int skipped;
+        private int failed;
+        private String lastError;
+    }
+
+    @Getter
+    @NoArgsConstructor
+    @AllArgsConstructor
+    @Builder
     public static class ApiResponse<T> {
         private boolean success;
         private String message;

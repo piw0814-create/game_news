@@ -51,6 +51,7 @@ def _analysis(entity_type: ArticleEntityType) -> ArticleAnalysisResult:
 
 def test_specific_game_disables_recent_topic_fallback(monkeypatch):
     captured = {}
+    monkeypatch.setattr(module.news_client, "get_existing_topic_integration", lambda article_id: None)
 
     def fake_candidates(**kwargs):
         captured.update(kwargs)
@@ -85,6 +86,7 @@ def test_specific_game_disables_recent_topic_fallback(monkeypatch):
 
 def test_none_entity_keeps_recent_topic_fallback(monkeypatch):
     captured = {}
+    monkeypatch.setattr(module.news_client, "get_existing_topic_integration", lambda article_id: None)
 
     def fake_candidates(**kwargs):
         captured.update(kwargs)
@@ -106,3 +108,69 @@ def test_none_entity_keeps_recent_topic_fallback(monkeypatch):
     )
 
     assert captured["allow_recent_fallback"] is True
+
+
+def test_matcher_failure_does_not_create_new_topic(monkeypatch):
+    from app.model.schemas import TopicCandidateResponse
+    import pytest
+
+    article = _article()
+    analysis = _analysis(ArticleEntityType.NONE)
+    candidate = TopicCandidateResponse(
+        id=999,
+        title="Existing event",
+        summary="existing summary",
+        category=NewsCategory.UPDATE,
+        firstSeenAt=datetime.now(timezone.utc),
+        lastUpdatedAt=datetime.now(timezone.utc),
+    )
+
+    monkeypatch.setattr(module.news_client, "get_existing_topic_integration", lambda article_id: None)
+    monkeypatch.setattr(module.news_client, "get_topic_candidates", lambda **kwargs: [candidate])
+    monkeypatch.setattr(
+        module.openai_topic_matcher,
+        "match",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("temporary matcher failure")),
+    )
+
+    created = {"value": False}
+
+    def fail_if_created(**kwargs):
+        created["value"] = True
+        raise AssertionError("Matcher 장애 시 새 Topic을 생성하면 안 됩니다")
+
+    monkeypatch.setattr(module.news_client, "integrate_topic", fail_if_created)
+
+    with pytest.raises(RuntimeError, match="temporary matcher failure"):
+        module.topic_integration_service.integrate(article, analysis)
+
+    assert created["value"] is False
+
+
+def test_existing_topic_link_skips_candidate_search_and_matcher(monkeypatch):
+    existing = TopicIntegrationResponse(
+        topicId=1001,
+        action=TopicIntegrationAction.ALREADY_LINKED,
+    )
+    monkeypatch.setattr(
+        module.news_client,
+        "get_existing_topic_integration",
+        lambda article_id: existing,
+    )
+    monkeypatch.setattr(
+        module.news_client,
+        "get_topic_candidates",
+        lambda **kwargs: (_ for _ in ()).throw(AssertionError("후보 검색 재실행 금지")),
+    )
+    monkeypatch.setattr(
+        module.openai_topic_matcher,
+        "match",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Matcher 재호출 금지")),
+    )
+
+    result = module.topic_integration_service.integrate(
+        _article(),
+        _analysis(ArticleEntityType.NONE),
+    )
+
+    assert result == existing

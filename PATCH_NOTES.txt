@@ -40,3 +40,27 @@ DB migration for existing schema (optional in dev because ddl-auto=update):
   unless it matches name/displayName/already-known aliases or is already used by another Franchise.
   This adds no IGDB call; only a local identity collision check is performed when a genuinely new alias is about to be stored.
   displayName is preserved and remains the UI-first representative name.
+
+Operational hardening: Article AI checkpoint recovery
+- AnalysisStatus adds ANALYZED and TOPIC_PENDING.
+- The normalized Article Analyzer result is persisted before Entity/Topic processing.
+- ANALYZED recovery resumes from Entity Resolution without another Article Analyzer call.
+- TOPIC_PENDING recovery resumes from Topic Integration without another Article Analyzer or Entity Resolution call.
+- Topic Matcher technical failures no longer create a new Topic; the article remains TOPIC_PENDING for recovery.
+- If Topic integration already succeeded but final COMPLETED status persistence failed, recovery first detects the existing TopicArticle and skips candidate search/Topic Matcher.
+- Startup recovery includes ANALYZED/TOPIC_PENDING immediately; periodic recovery picks stale intermediate checkpoints.
+- Optional explicit DB migration: scripts/migrate-add-analysis-checkpoint.sql (dev ddl-auto=update can add the columns automatically).
+
+Data quality: canonical article URL deduplication
+- NewsArticle keeps the original url and stores a separate canonical_url for duplicate detection.
+- Canonicalization removes fragments and tracking parameters (utm_*, fbclid, gclid, ref, ref_src), lowercases scheme/host, removes default ports, normalizes trailing slashes, and sorts retained query parameters.
+- Semantic query parameters such as id=123 are preserved.
+- New articles are rejected when either the original URL or canonical URL already exists; a DB unique constraint protects canonical_url races.
+- Existing rows are not auto-merged/deleted. ADMIN can dry-run/apply a safe backfill via POST /api/admin/news/canonical-urls/backfill?dryRun=true|false.
+- Canonical collisions are reported and left NULL for manual review; only non-conflicting rows are backfilled.
+- Optional explicit schema migration: scripts/migrate-add-canonical-url.sql (dev ddl-auto=update can add the column/index automatically).
+
+## RSS / article input sanitization
+- News Service stores sanitized plain-text article content (HTML/script/style/etc. removed).
+- Existing content can be inspected/applied via `/api/admin/news/content/sanitize?dryRun=true|false`; this does not republish Kafka events or rerun AI.
+- Article Analyzer marks all supplied article metadata/body as untrusted external data and receives it as delimited JSON.
