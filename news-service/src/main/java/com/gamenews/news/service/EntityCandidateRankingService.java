@@ -35,7 +35,8 @@ public class EntityCandidateRankingService {
                     identityScore(detectedName, candidate.getDisplayName()));
 
             boolean preferred = candidate.getEntityKind() == preferredKind;
-            boolean localVerified = candidate.getLocalId() != null && candidate.getIgdbId() != null;
+            boolean localVerified = candidate.getLocalId() != null
+                    && (candidate.getIgdbId() != null || candidate.getIgdbCollectionId() != null);
             boolean local = candidate.getLocalId() != null;
             boolean mainGame = candidate.getEntityKind() == EntityReviewKind.GAME
                     && candidate.getGameType() != null

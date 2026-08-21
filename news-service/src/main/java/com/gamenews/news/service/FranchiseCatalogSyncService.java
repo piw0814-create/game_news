@@ -38,16 +38,24 @@ public class FranchiseCatalogSyncService {
     @Transactional
     public FranchiseAdminDto.SyncResponse sync(Long franchiseId) {
         Franchise franchise = findFranchise(franchiseId);
-        if (franchise.getIgdbId() == null && !tryAttachExactIgdbIdentity(franchise)) {
-            throw new IllegalArgumentException("IGDB에서 정확히 일치하는 프랜차이즈를 찾지 못했습니다");
+        if (!franchise.hasIgdbIdentity() && !tryAttachExactIgdbIdentity(franchise)) {
+            throw new IllegalArgumentException("IGDB에서 정확히 일치하는 Franchise/Series를 찾지 못했습니다");
         }
 
-        IgdbClient.IgdbFranchise rawFranchise = igdbClient.getFranchiseById(franchise.getIgdbId());
-        franchise.applyIgdbIdentity(rawFranchise.getId(), rawFranchise.getName());
-
-        List<Long> igdbGameIds = rawFranchise.getGames() == null
-                ? List.of()
-                : rawFranchise.getGames().stream().filter(java.util.Objects::nonNull).distinct().toList();
+        List<Long> igdbGameIds;
+        if (franchise.getIgdbId() != null) {
+            IgdbClient.IgdbFranchise rawFranchise = igdbClient.getFranchiseById(franchise.getIgdbId());
+            franchise.applyIgdbIdentity(rawFranchise.getId(), rawFranchise.getName());
+            igdbGameIds = rawFranchise.getGames() == null
+                    ? List.of()
+                    : rawFranchise.getGames().stream().filter(java.util.Objects::nonNull).distinct().toList();
+        } else {
+            IgdbClient.IgdbCollection rawCollection = igdbClient.getCollectionById(franchise.getIgdbCollectionId());
+            franchise.applyIgdbCollectionIdentity(rawCollection.getId(), rawCollection.getName());
+            igdbGameIds = rawCollection.getGames() == null
+                    ? List.of()
+                    : rawCollection.getGames().stream().filter(java.util.Objects::nonNull).distinct().toList();
+        }
         List<IgdbClient.IgdbGame> rawGames = igdbClient.getGamesByIds(igdbGameIds);
 
         int created = 0;
@@ -80,6 +88,7 @@ public class FranchiseCatalogSyncService {
         return FranchiseAdminDto.SyncResponse.builder()
                 .franchiseId(franchise.getId())
                 .igdbId(franchise.getIgdbId())
+                .igdbCollectionId(franchise.getIgdbCollectionId())
                 .igdbGameCount(igdbGameIds.size())
                 .createdGameCount(created)
                 .updatedGameCount(updated)
@@ -105,7 +114,9 @@ public class FranchiseCatalogSyncService {
     }
 
     private void ensureFranchiseRelation(Game game, Franchise franchise, IgdbClient.IgdbGame rawGame) {
-        boolean primary = rawGame.getFranchise() != null
+        boolean hasPrimarySignal = franchise.getIgdbId() != null;
+        boolean primary = hasPrimarySignal
+                && rawGame.getFranchise() != null
                 && franchise.getIgdbId().equals(rawGame.getFranchise().getId());
 
         GameFranchise relation = gameFranchiseRepository
@@ -117,11 +128,13 @@ public class FranchiseCatalogSyncService {
                         .source(GameFranchiseSource.IGDB)
                         .build());
 
-        if (primary) {
-            gameFranchiseRepository.findAllByGame_IdOrderByPrimaryDescCreatedAtAsc(game.getId())
-                    .forEach(existing -> existing.updatePrimary(false));
+        if (hasPrimarySignal) {
+            if (primary) {
+                gameFranchiseRepository.findAllByGame_IdOrderByPrimaryDescCreatedAtAsc(game.getId())
+                        .forEach(existing -> existing.updatePrimary(false));
+            }
+            relation.updatePrimary(primary);
         }
-        relation.updatePrimary(primary);
         relation.markIgdbSource();
         gameFranchiseRepository.save(relation);
     }
@@ -139,7 +152,7 @@ public class FranchiseCatalogSyncService {
 
 
     private boolean tryAttachExactIgdbIdentity(Franchise franchise) {
-        if (franchise.getIgdbId() != null) return true;
+        if (franchise.hasIgdbIdentity()) return true;
         if (!igdbClient.isConfigured()) return false;
 
         List<String> identities = new ArrayList<>();
@@ -147,30 +160,53 @@ public class FranchiseCatalogSyncService {
         identities.add(franchise.getDisplayName());
         franchise.getAliases().stream().map(FranchiseAlias::getAlias).forEach(identities::add);
 
-        Map<Long, IgdbClient.IgdbFranchise> exactMatches = new LinkedHashMap<>();
+        Map<Long, IgdbClient.IgdbFranchise> exactFranchises = new LinkedHashMap<>();
+        Map<Long, IgdbClient.IgdbCollection> exactCollections = new LinkedHashMap<>();
         for (String identity : identities) {
             if (identity == null || identity.isBlank()) continue;
             String expected = identityKey(identity);
-            for (IgdbClient.IgdbFranchise candidate : igdbClient.searchFranchises(identity, 5)) {
+            for (IgdbClient.IgdbFranchise candidate : igdbClient.findFranchisesByExactName(identity, 20)) {
                 if (candidate == null || candidate.getId() == null || candidate.getName() == null) continue;
                 if (identityKey(candidate.getName()).equals(expected)) {
-                    exactMatches.putIfAbsent(candidate.getId(), candidate);
+                    exactFranchises.putIfAbsent(candidate.getId(), candidate);
                 }
             }
-            if (exactMatches.size() == 1) break;
+            for (IgdbClient.IgdbCollection candidate : igdbClient.findCollectionsByExactName(identity, 20)) {
+                if (candidate == null || candidate.getId() == null || candidate.getName() == null) continue;
+                if (identityKey(candidate.getName()).equals(expected)) {
+                    exactCollections.putIfAbsent(candidate.getId(), candidate);
+                }
+            }
+            if (exactFranchises.size() + exactCollections.size() == 1) break;
         }
 
-        if (exactMatches.size() != 1) return false;
-        IgdbClient.IgdbFranchise matched = exactMatches.values().iterator().next();
-        Franchise alreadyLinked = franchiseRepository.findByIgdbId(matched.getId()).orElse(null);
+        if (exactFranchises.size() + exactCollections.size() != 1) return false;
+
+        if (exactFranchises.size() == 1) {
+            IgdbClient.IgdbFranchise matched = exactFranchises.values().iterator().next();
+            Franchise alreadyLinked = franchiseRepository.findByIgdbId(matched.getId()).orElse(null);
+            if (alreadyLinked != null && !alreadyLinked.getId().equals(franchise.getId())) {
+                log.warn("[IGDB Catalog] Exact Franchise match already belongs to another local Franchise - franchiseId={}, existingFranchiseId={}, igdbId={}",
+                        franchise.getId(), alreadyLinked.getId(), matched.getId());
+                return false;
+            }
+            franchise.applyIgdbIdentity(matched.getId(), matched.getName());
+            franchiseRepository.save(franchise);
+            log.info("[IGDB Catalog] Franchise exact match attached - franchiseId={}, igdbId={}, name={}",
+                    franchise.getId(), matched.getId(), matched.getName());
+            return true;
+        }
+
+        IgdbClient.IgdbCollection matched = exactCollections.values().iterator().next();
+        Franchise alreadyLinked = franchiseRepository.findByIgdbCollectionId(matched.getId()).orElse(null);
         if (alreadyLinked != null && !alreadyLinked.getId().equals(franchise.getId())) {
-            log.warn("[IGDB Catalog] Exact match already belongs to another Franchise - franchiseId={}, existingFranchiseId={}, igdbId={}",
+            log.warn("[IGDB Catalog] Exact Collection match already belongs to another local Franchise - franchiseId={}, existingFranchiseId={}, collectionId={}",
                     franchise.getId(), alreadyLinked.getId(), matched.getId());
             return false;
         }
-        franchise.applyIgdbIdentity(matched.getId(), matched.getName());
+        franchise.applyIgdbCollectionIdentity(matched.getId(), matched.getName());
         franchiseRepository.save(franchise);
-        log.info("[IGDB Catalog] Franchise exact match attached - franchiseId={}, igdbId={}, name={}",
+        log.info("[IGDB Catalog] Collection exact match attached - franchiseId={}, collectionId={}, name={}",
                 franchise.getId(), matched.getId(), matched.getName());
         return true;
     }

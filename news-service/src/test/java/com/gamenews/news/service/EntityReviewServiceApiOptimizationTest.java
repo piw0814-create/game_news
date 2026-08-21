@@ -7,6 +7,7 @@ import com.gamenews.news.entity.EntityReview;
 import com.gamenews.news.entity.EntityReviewKind;
 import com.gamenews.news.entity.EntityReviewStatus;
 import com.gamenews.news.event.EntityReviewResolvedEvent;
+import com.gamenews.news.entity.Franchise;
 import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.NewsArticle;
 import com.gamenews.news.repository.ArticleFranchiseRepository;
@@ -33,7 +34,6 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -152,6 +152,8 @@ class EntityReviewServiceApiOptimizationTest {
         verify(igdbClient).searchGames("FC 26", 5);
         verify(igdbClient, never()).findFranchisesByExactName(any(), anyInt());
         verify(igdbClient, never()).searchFranchises(any(), anyInt());
+        verify(igdbClient, never()).findCollectionsByExactName(any(), anyInt());
+        verify(igdbClient, never()).searchCollections(any(), anyInt());
         verify(mapped).addAlias("FC 26");
     }
 
@@ -176,6 +178,79 @@ class EntityReviewServiceApiOptimizationTest {
 
         assertThat(response.getOutcome()).isEqualTo(EntityReviewDto.ResolutionOutcome.REVIEW_REQUIRED);
         verify(gameRepository, never()).findByIgdbId(any());
+    }
+
+    @Test
+    void exactIgdbCollectionCanAutoResolveFranchiseIdentity() {
+        NewsArticle article = org.mockito.Mockito.mock(NewsArticle.class);
+        Franchise mapped = org.mockito.Mockito.mock(Franchise.class);
+        when(article.getId()).thenReturn(57L);
+        when(mapped.getId()).thenReturn(31L);
+        when(newsArticleRepository.findById(57L)).thenReturn(Optional.of(article));
+        when(franchiseRepository.findExactIdentityCandidates("Thief")).thenReturn(List.of());
+        when(igdbClient.isConfigured()).thenReturn(true);
+        when(igdbClient.findFranchisesByExactName("Thief", 20)).thenReturn(List.of());
+
+        IgdbClient.IgdbCollection collection = new IgdbClient.IgdbCollection();
+        collection.setId(2L);
+        collection.setName("Thief");
+        when(igdbClient.findCollectionsByExactName("Thief", 20)).thenReturn(List.of(collection));
+        when(franchiseService.upsertIgdbCollection(2L, "Thief")).thenReturn(mapped);
+        when(articleFranchiseRepository.existsByArticle_IdAndFranchise_Id(57L, 31L)).thenReturn(false);
+        when(entityReviewRepository.findFirstByArticle_IdAndEntityKindAndDetectedNameIgnoreCaseAndStatusOrderByIdDesc(
+                any(), any(), any(), any())).thenReturn(Optional.empty());
+
+        EntityReviewDto.InternalResolveResponse response = service.resolveFranchise(
+                request(57L, "Thief", "Thief 시리즈 경력"));
+
+        assertThat(response.getOutcome()).isEqualTo(EntityReviewDto.ResolutionOutcome.AUTO_LINKED);
+        assertThat(response.getFranchiseId()).isEqualTo(31L);
+        verify(franchiseService).upsertIgdbCollection(2L, "Thief");
+        verify(igdbClient, never()).searchGames(any(), anyInt());
+    }
+
+    @Test
+    void adminFranchiseResolutionRemembersDetectedAliasAndPreservesDisplayNameWithoutIgdbCall() {
+        NewsArticle article = org.mockito.Mockito.mock(NewsArticle.class);
+        when(article.getId()).thenReturn(90L);
+
+        EntityReview review = EntityReview.builder()
+                .id(20L)
+                .article(article)
+                .entityKind(EntityReviewKind.FRANCHISE)
+                .detectedName("Legacy Series")
+                .aiEntityType("FRANCHISE")
+                .primary(false)
+                .confidenceScore(new BigDecimal("0.88"))
+                .reason("series context")
+                .status(EntityReviewStatus.PENDING)
+                .build();
+
+        Franchise franchise = Franchise.builder()
+                .id(31L)
+                .name("Canonical Series")
+                .displayName("대표 시리즈명")
+                .igdbCollectionId(2L)
+                .build();
+
+        when(entityReviewRepository.findById(20L)).thenReturn(Optional.of(review));
+        when(franchiseRepository.findById(31L)).thenReturn(Optional.of(franchise));
+        when(franchiseRepository.findExactIdentityCandidates("Legacy Series")).thenReturn(List.of());
+        when(franchiseRepository.save(franchise)).thenReturn(franchise);
+        when(articleFranchiseRepository.existsByArticle_IdAndFranchise_Id(90L, 31L)).thenReturn(false);
+        when(entityReviewRepository.save(review)).thenReturn(review);
+        when(topicIntegrationService.refreshRelationsForArticle(90L)).thenReturn(null);
+
+        EntityReviewDto.AdminResponse response = service.resolveAdmin(
+                20L,
+                new EntityReviewDto.AdminResolveRequest(
+                        EntityReviewDto.ResolutionType.FRANCHISE, 31L, null, null));
+
+        assertThat(response.getStatus()).isEqualTo(EntityReviewStatus.RESOLVED);
+        assertThat(franchise.getAliases()).extracting("alias").containsExactly("Legacy Series");
+        assertThat(franchise.getDisplayName()).isEqualTo("대표 시리즈명");
+        verify(franchiseRepository).save(franchise);
+        verifyNoInteractions(igdbClient);
     }
 
     @Test
@@ -221,7 +296,7 @@ class EntityReviewServiceApiOptimizationTest {
         assertThat(response.getStatus()).isEqualTo(EntityReviewStatus.RESOLVED);
         assertThat(response.getResolvedGameId()).isEqualTo(44L);
         verify(topicIntegrationService).refreshRelationsForArticle(82L);
-        verify(eventPublisher).publishEvent(argThat(event ->
+        verify(eventPublisher).publishEvent(argThat((Object event) ->
                 event instanceof EntityReviewResolvedEvent resolved && resolved.topicId().equals(55L)));
         verify(igdbClient, never()).findFranchisesByExactName(any(), anyInt());
         verify(igdbClient, never()).searchFranchises(any(), anyInt());
@@ -268,23 +343,54 @@ class EntityReviewServiceApiOptimizationTest {
     }
 
     @Test
-    void adminRecheckRejectsPendingFranchiseReview() {
+    void adminRecheckRefreshesPendingFranchiseWithIgdbSeriesCandidate() throws Exception {
         NewsArticle article = org.mockito.Mockito.mock(NewsArticle.class);
+        when(article.getId()).thenReturn(57L);
         EntityReview review = EntityReview.builder()
                 .id(12L)
                 .article(article)
                 .entityKind(EntityReviewKind.FRANCHISE)
                 .detectedName("Thief")
+                .aiEntityType("FRANCHISE")
+                .primary(false)
+                .confidenceScore(new BigDecimal("0.88"))
+                .reason("Thief 시리즈 경력을 다룬 기사")
                 .status(EntityReviewStatus.PENDING)
+                .candidateJson("old")
                 .build();
+
+        IgdbClient.IgdbCollection thiefSeries = new IgdbClient.IgdbCollection();
+        thiefSeries.setId(2L);
+        thiefSeries.setName("Thief");
+
         when(entityReviewRepository.findById(12L)).thenReturn(Optional.of(review));
+        when(newsArticleRepository.findById(57L)).thenReturn(Optional.of(article));
+        when(franchiseRepository.findExactIdentityCandidates("Thief")).thenReturn(List.of());
+        when(gameIdentityService.findExactCandidates("Thief")).thenReturn(List.of());
+        when(igdbClient.isConfigured()).thenReturn(true);
+        when(igdbClient.findFranchisesByExactName("Thief", 20)).thenReturn(List.of());
+        when(igdbClient.findCollectionsByExactName("Thief", 20)).thenReturn(List.of(thiefSeries));
+        when(igdbClient.searchFranchises("Thief", 5)).thenReturn(List.of());
+        when(igdbClient.findGamesByExactName("Thief", 20)).thenReturn(List.of());
+        when(igdbClient.searchGames("Thief", 5)).thenReturn(List.of());
+        when(entityReviewRepository.findFirstByArticle_IdAndEntityKindAndDetectedNameIgnoreCaseAndStatusOrderByIdDesc(
+                57L, EntityReviewKind.FRANCHISE, "Thief", EntityReviewStatus.PENDING))
+                .thenReturn(Optional.of(review));
+        when(objectMapper.writeValueAsString(any())).thenReturn("[]");
+        when(entityReviewRepository.save(any(EntityReview.class))).then(returnsFirstArg());
 
-        assertThatThrownBy(() -> service.recheckAdmin(12L))
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("Game 검토 항목만");
+        EntityReviewDto.AdminResponse response = service.recheckAdmin(12L);
 
+        assertThat(response.getStatus()).isEqualTo(EntityReviewStatus.PENDING);
+        verify(igdbClient).findCollectionsByExactName("Thief", 20);
+        verify(objectMapper).writeValueAsString(argThat(value -> {
+            if (!(value instanceof List<?> list)) return false;
+            return list.stream().anyMatch(item -> item instanceof EntityReviewDto.Candidate candidate
+                    && candidate.getEntityKind() == EntityReviewKind.FRANCHISE
+                    && Long.valueOf(2L).equals(candidate.getIgdbCollectionId())
+                    && "Thief".equals(candidate.getName()));
+        }));
         verifyNoInteractions(topicIntegrationService);
-        verifyNoInteractions(igdbClient);
     }
 
     @Test

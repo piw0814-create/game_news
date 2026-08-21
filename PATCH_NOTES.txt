@@ -22,3 +22,21 @@ A. Existing Fortnite review #3 UI should show IGDB Main Game #1905 near the top.
 B. Resolving review #3 with IGDB #1905 should enrich/reuse local Fortnite #27 (if it is still the sole unmapped exact local Game) rather than create a duplicate.
 C. A new high-confidence ordinary 'Fortnite' article should auto-link the Main Game and should not create EntityReview just because IGDB also contains Port/Expansion/Pack entries.
 D. An article explicitly about a remaster/port/DLC still uses that game_type only; if multiple such exact candidates remain, it goes to EntityReview.
+
+K) IGDB Collection/Series resolution + EntityReview refresh
+- Local Franchise can now keep a separate igdb_collection_id in addition to /franchises igdb_id.
+  The two IGDB endpoint ID spaces are never mixed.
+- FRANCHISE resolution checks both IGDB /franchises and /collections, and Game candidates also expose collections.
+- IGDB Collection candidates are normalized into the local Franchise domain and can be selected in Admin Entity Review.
+- POST /api/admin/entity-reviews/{id}/recheck now supports both GAME and FRANCHISE PENDING reviews.
+  This refreshes candidate_json from the latest Local/IGDB data and still uses the existing safe AUTO rules.
+- Admin Entity Review UI adds '최신 후보 재조회' and explains that empty candidates can be refreshed later.
+- Manual Franchise catalog sync supports either IGDB Franchise.games or Collection.games.
+- Regression targets: Thief should expose IGDB Series #2 as a FRANCHISE candidate; SPECIFIC_GAME still performs no Franchise/Collection lookup.
+
+DB migration for existing schema (optional in dev because ddl-auto=update):
+  scripts/migrate-add-igdb-collection-series.sql
+- Franchise resolution now remembers a newly observed detectedName as an alias after a safe/admin resolution,
+  unless it matches name/displayName/already-known aliases or is already used by another Franchise.
+  This adds no IGDB call; only a local identity collision check is performed when a genuinely new alias is about to be stored.
+  displayName is preserved and remains the UI-first representative name.

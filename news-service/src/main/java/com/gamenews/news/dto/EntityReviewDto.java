@@ -73,6 +73,7 @@ public class EntityReviewDto {
         private EntityReviewKind entityKind;
         private Long localId;
         private Long igdbId;
+        private Long igdbCollectionId;
         private String name;
         private String displayName;
         private String publisher;
@@ -138,5 +139,6 @@ public class EntityReviewDto {
 
         private Long localEntityId;
         private Long igdbId;
+        private Long igdbCollectionId;
     }
 }

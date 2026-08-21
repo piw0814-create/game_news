@@ -75,6 +75,13 @@
             <button
               v-if="review.status === 'PENDING'"
               type="button"
+              class="text-button"
+              :disabled="resolvingId === review.id"
+              @click="recheckReview(review)"
+            >최신 후보 재조회</button>
+            <button
+              v-if="review.status === 'PENDING'"
+              type="button"
               class="text-button danger"
               :disabled="resolvingId === review.id"
               @click="resolveUnrelated(review)"
@@ -107,7 +114,7 @@
                 <div class="candidate-grid">
                   <div
                     v-for="(candidate, index) in group.items"
-                    :key="`${candidate.source}-${candidate.entityKind}-${candidate.localId || candidate.igdbId || index}`"
+                    :key="`${candidate.source}-${candidate.entityKind}-${candidate.localId || candidate.igdbId || candidate.igdbCollectionId || index}`"
                     class="candidate-card"
                     :class="{
                       recommended: candidate.entityKind === review.entityKind,
@@ -125,7 +132,8 @@
                     <p class="candidate-meta">
                       {{ candidateSourceLabel(candidate.source) }}
                       <template v-if="candidate.localId"> · Local #{{ candidate.localId }}</template>
-                      <template v-if="candidate.igdbId"> · IGDB #{{ candidate.igdbId }}</template>
+                      <template v-if="candidate.igdbId"> · #{{ candidate.igdbId }}</template>
+                      <template v-if="candidate.igdbCollectionId"> · #{{ candidate.igdbCollectionId }}</template>
                     </p>
                     <p v-if="candidate.publisher || candidate.developer" class="candidate-meta">
                       {{ [candidate.developer, candidate.publisher].filter(Boolean).join(' · ') }}
@@ -146,7 +154,7 @@
                 </div>
               </section>
             </div>
-            <p v-else class="no-candidate">IGDB/로컬 후보가 없습니다. 게임·프랜차이즈 관리 화면에서 기준 데이터를 먼저 등록한 뒤 다시 검토하세요.</p>
+            <p v-else class="no-candidate">현재 IGDB/로컬 후보를 찾지 못했습니다. IGDB나 로컬 기준 데이터가 추가된 뒤 ‘최신 후보 재조회’를 누르면 다시 검색합니다.</p>
           </div>
 
           <div v-else class="resolved-line">
@@ -202,6 +210,8 @@ function errorMessage(err, fallback) { return err?.response?.data?.message || er
 function kindLabel(kind) { return kind === 'GAME' ? '게임 후보' : '프랜차이즈 후보' }
 function candidateSourceLabel(source) {
   if (source === 'LOCAL_IGDB') return 'LOCAL · IGDB'
+  if (source === 'IGDB_FRANCHISE') return 'IGDB · Franchise'
+  if (source === 'IGDB_COLLECTION') return 'IGDB · Series'
   return source || '-'
 }
 function statusLabel(value) { return value === 'RESOLVED' ? '확정 완료' : value === 'REJECTED' ? '관련 없음' : '검토 필요' }
@@ -282,13 +292,30 @@ async function resolveCandidate(review, candidate) {
     const payload = {
       resolutionType: candidate.entityKind,
       localEntityId: candidate.localId || null,
-      igdbId: candidate.localId ? null : (candidate.igdbId || null)
+      igdbId: candidate.localId ? null : (candidate.igdbId || null),
+      igdbCollectionId: candidate.localId ? null : (candidate.igdbCollectionId || null)
     }
     await entityReviewApi.resolve(review.id, payload)
     notice.value = `${candidate.displayName || candidate.name}으로 확정했습니다. 기사/Topic 관계를 다시 동기화합니다.`
     await loadReviews()
   } catch (err) {
     error.value = errorMessage(err, '검토 결정을 반영하지 못했습니다.')
+  } finally {
+    resolvingId.value = null
+  }
+}
+
+async function recheckReview(review) {
+  resolvingId.value = review.id
+  error.value = ''
+  try {
+    const refreshed = extractData(await entityReviewApi.recheck(review.id))
+    notice.value = refreshed?.status === 'RESOLVED'
+      ? '최신 로컬/IGDB 기준으로 안전하게 자동 확정했습니다. 기사/Topic 관계도 다시 동기화합니다.'
+      : '최신 로컬/IGDB 기준으로 후보를 다시 조회했습니다.'
+    await loadReviews()
+  } catch (err) {
+    error.value = errorMessage(err, '최신 후보를 다시 조회하지 못했습니다.')
   } finally {
     resolvingId.value = null
   }

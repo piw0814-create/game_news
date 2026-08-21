@@ -52,6 +52,9 @@ public class Franchise {
     @Column(name = "igdb_id", unique = true)
     private Long igdbId;
 
+    @Column(name = "igdb_collection_id", unique = true)
+    private Long igdbCollectionId;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "metadata_source", length = 30)
     private FranchiseMetadataSource metadataSource;
@@ -98,6 +101,22 @@ public class Franchise {
             this.igdbId = igdbId;
             this.metadataSource = FranchiseMetadataSource.IGDB;
         }
+        applyExternalName(name);
+    }
+
+    public void applyIgdbCollectionIdentity(Long igdbCollectionId, String name) {
+        if (igdbCollectionId != null) {
+            this.igdbCollectionId = igdbCollectionId;
+            this.metadataSource = FranchiseMetadataSource.IGDB;
+        }
+        applyExternalName(name);
+    }
+
+    public boolean hasIgdbIdentity() {
+        return igdbId != null || igdbCollectionId != null;
+    }
+
+    private void applyExternalName(String name) {
         if (name != null && !name.isBlank()) {
             String nextName = name.trim();
             String previousName = this.name;

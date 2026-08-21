@@ -138,6 +138,39 @@ public class FranchiseService {
         return franchiseRepository.save(franchise);
     }
 
+    @Transactional
+    public Franchise upsertIgdbCollection(IgdbClient.IgdbCollection raw) {
+        if (raw == null) {
+            throw new IllegalArgumentException("IGDB Collection id/name이 필요합니다");
+        }
+        return upsertIgdbCollection(raw.getId(), raw.getName());
+    }
+
+    @Transactional
+    public Franchise upsertIgdbCollection(Long igdbCollectionId, String name) {
+        if (igdbCollectionId == null || name == null || name.isBlank()) {
+            throw new IllegalArgumentException("IGDB Collection id/name이 필요합니다");
+        }
+
+        String normalizedName = name.trim();
+        Franchise franchise = franchiseRepository.findByIgdbCollectionId(igdbCollectionId)
+                .orElseGet(() -> franchiseRepository.findByNameIgnoreCase(normalizedName)
+                        .orElseGet(() -> Franchise.builder()
+                                .name(normalizedName)
+                                .igdbCollectionId(igdbCollectionId)
+                                .metadataSource(FranchiseMetadataSource.IGDB)
+                                .build()));
+
+        if (franchise.getIgdbCollectionId() != null
+                && !franchise.getIgdbCollectionId().equals(igdbCollectionId)) {
+            throw new IllegalArgumentException(
+                    "동일한 Franchise 이름이 다른 IGDB Collection ID에 연결되어 있습니다: " + normalizedName);
+        }
+
+        franchise.applyIgdbCollectionIdentity(igdbCollectionId, normalizedName);
+        return franchiseRepository.save(franchise);
+    }
+
     private Franchise findFranchise(Long id) {
         return franchiseRepository.findById(id)
                 .orElseThrow(() -> new IllegalArgumentException("프랜차이즈를 찾을 수 없습니다: " + id));

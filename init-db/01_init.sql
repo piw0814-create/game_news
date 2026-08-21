@@ -46,12 +46,13 @@ CREATE TABLE IF NOT EXISTS game_aliases (
     FOREIGN KEY (game_id) REFERENCES games(id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 
--- 게임 IP/프랜차이즈 기준 정보 (IGDB Franchise와 연결 가능)
+-- 게임 IP/프랜차이즈 기준 정보 (IGDB Franchise 또는 Collection/Series와 연결 가능)
 CREATE TABLE IF NOT EXISTS franchises (
     id              BIGINT       NOT NULL AUTO_INCREMENT,
     name            VARCHAR(255) NOT NULL UNIQUE,
     display_name    VARCHAR(255),
     igdb_id         BIGINT UNIQUE,
+    igdb_collection_id BIGINT UNIQUE,
     metadata_source VARCHAR(30) COMMENT 'MANUAL | IGDB',
     last_synced_at  DATETIME(6),
     created_at      DATETIME(6) NOT NULL,

@@ -42,7 +42,8 @@
             <p v-if="franchise.displayName" class="canonical">{{ franchise.name }}</p>
             <p class="meta">
               게임 {{ franchise.gameCount || 0 }} · 기사 {{ franchise.articleCount || 0 }} · Topic {{ franchise.topicCount || 0 }}
-              <template v-if="franchise.igdbId"> · IGDB #{{ franchise.igdbId }}</template>
+              <template v-if="franchise.igdbId"> · IGDB Franchise #{{ franchise.igdbId }}</template>
+              <template v-if="franchise.igdbCollectionId"> · IGDB Series #{{ franchise.igdbCollectionId }}</template>
             </p>
             <p v-if="franchise.lastSyncedAt" class="meta">최근 IGDB 동기화 {{ formatDate(franchise.lastSyncedAt) }}</p>
             <p v-if="franchise.aliases?.length" class="aliases">{{ franchise.aliases.join(' · ') }}</p>
@@ -74,7 +75,7 @@
             <template v-else-if="detailFor(franchise.id)">
               <div class="review-overview">
                 <div><small>메타데이터</small><strong>{{ sourceLabel(detailFor(franchise.id).metadataSource) }}</strong></div>
-                <div><small>IGDB</small><strong>{{ detailFor(franchise.id).igdbId ? `#${detailFor(franchise.id).igdbId}` : '미연결' }}</strong></div>
+                <div><small>IGDB</small><strong>{{ externalIdentityLabel(detailFor(franchise.id)) }}</strong></div>
                 <div><small>소속 게임</small><strong>{{ detailFor(franchise.id).games?.length || 0 }}</strong></div>
                 <div><small>관련 기사</small><strong>{{ detailFor(franchise.id).articles?.length || 0 }}</strong></div>
                 <div><small>관련 Topic</small><strong>{{ detailFor(franchise.id).topics?.length || 0 }}</strong></div>
@@ -83,7 +84,7 @@
               <div class="sync-row">
                 <div>
                   <strong>IGDB 카탈로그</strong>
-                  <p>IGDB Franchise의 games 목록을 기준으로 Game과 GameFranchise를 최신화합니다.</p>
+                  <p>IGDB Franchise 또는 Series(Collection)의 games 목록을 기준으로 Game과 GameFranchise를 최신화합니다.</p>
                 </div>
                 <button
                   type="button"
@@ -91,7 +92,7 @@
                   :disabled="syncingId === franchise.id"
                   @click="syncIgdb(franchise)"
                 >
-                  {{ syncingId === franchise.id ? '동기화 중...' : (detailFor(franchise.id).igdbId ? 'IGDB 동기화' : 'IGDB 연결 · 동기화') }}
+                  {{ syncingId === franchise.id ? '동기화 중...' : ((detailFor(franchise.id).igdbId || detailFor(franchise.id).igdbCollectionId) ? 'IGDB 동기화' : 'IGDB 연결 · 동기화') }}
                 </button>
               </div>
 
@@ -210,6 +211,11 @@ const filteredFranchises = computed(() => {
 function extractData(response) { return response?.data?.data ?? response?.data }
 function errorMessage(err, fallback) { return err?.response?.data?.message || err?.message || fallback }
 function sourceLabel(source) { return source === 'IGDB' ? 'IGDB' : '로컬' }
+function externalIdentityLabel(franchise) {
+  if (franchise?.igdbId) return `Franchise #${franchise.igdbId}`
+  if (franchise?.igdbCollectionId) return `Series #${franchise.igdbCollectionId}`
+  return '미연결'
+}
 function relationSourceLabel(source) { return source === 'IGDB' ? 'IGDB 관계' : source === 'MANUAL' ? '관리자 보정' : '기존 관계' }
 function formatDate(value) { return value ? new Date(value).toLocaleString('ko-KR') : '-' }
 function parseAliases(value) {

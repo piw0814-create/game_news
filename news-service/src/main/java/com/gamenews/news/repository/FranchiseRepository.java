@@ -14,6 +14,8 @@ public interface FranchiseRepository extends JpaRepository<Franchise, Long> {
 
     Optional<Franchise> findByIgdbId(Long igdbId);
 
+    Optional<Franchise> findByIgdbCollectionId(Long igdbCollectionId);
+
     @Query("""
             select distinct f
             from Franchise f

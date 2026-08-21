@@ -45,6 +45,8 @@ public class IgdbClient {
             "franchise.name",
             "franchises.id",
             "franchises.name",
+            "collections.id",
+            "collections.name",
             "game_type.id",
             "game_type.type",
             "version_parent");
@@ -178,6 +180,66 @@ public class IgdbClient {
                     body,
                     new ParameterizedTypeReference<List<IgdbFranchise>>() {},
                     "franchises batch size=" + chunk.size()));
+        }
+        return List.copyOf(result);
+    }
+
+    public List<IgdbCollection> findCollectionsByExactName(String name, int limit) {
+        ensureConfigured();
+        String safeName = escapeApicalypseString(name);
+        int safeLimit = Math.max(1, Math.min(limit, 20));
+        String body = "fields id,name,games; where name ~ \"" + safeName + "\"; limit " + safeLimit + ";";
+        return request(
+                "/collections",
+                body,
+                new ParameterizedTypeReference<List<IgdbCollection>>() {},
+                "collection exact name=\"" + safeLogValue(name) + "\"");
+    }
+
+    public List<IgdbCollection> searchCollections(String searchTerm, int limit) {
+        ensureConfigured();
+        String safeSearch = escapeApicalypseString(searchTerm);
+        int safeLimit = Math.max(1, Math.min(limit, 10));
+        String body = "fields id,name,games; where name ~ *\"" + safeSearch + "\"*; limit " + safeLimit + ";";
+        return request(
+                "/collections",
+                body,
+                new ParameterizedTypeReference<List<IgdbCollection>>() {},
+                "collection fuzzy name=\"" + safeLogValue(searchTerm) + "\"");
+    }
+
+    public IgdbCollection getCollectionById(Long igdbCollectionId) {
+        ensureConfigured();
+        String body = "fields id,name,games; where id = " + igdbCollectionId + "; limit 1;";
+        return request(
+                "/collections",
+                body,
+                new ParameterizedTypeReference<List<IgdbCollection>>() {},
+                "collection id=" + igdbCollectionId).stream()
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "IGDB 시리즈(Collection)를 찾을 수 없습니다: " + igdbCollectionId));
+    }
+
+    public List<IgdbCollection> getCollectionsByIds(List<Long> igdbCollectionIds) {
+        ensureConfigured();
+        if (igdbCollectionIds == null || igdbCollectionIds.isEmpty()) {
+            return List.of();
+        }
+        List<Long> ids = igdbCollectionIds.stream().filter(java.util.Objects::nonNull).distinct().toList();
+        if (ids.isEmpty()) return List.of();
+
+        java.util.ArrayList<IgdbCollection> result = new java.util.ArrayList<>();
+        final int chunkSize = 500;
+        for (int from = 0; from < ids.size(); from += chunkSize) {
+            List<Long> chunk = ids.subList(from, Math.min(from + chunkSize, ids.size()));
+            String joined = chunk.stream().map(String::valueOf).collect(java.util.stream.Collectors.joining(","));
+            String body = "fields id,name,games; where id = (" + joined + "); limit " + chunk.size() + ";";
+            result.addAll(request(
+                    "/collections",
+                    body,
+                    new ParameterizedTypeReference<List<IgdbCollection>>() {},
+                    "collections batch size=" + chunk.size()));
         }
         return List.copyOf(result);
     }
@@ -373,6 +435,7 @@ public class IgdbClient {
         private List<IgdbInvolvedCompany> involvedCompanies;
         private IgdbNamedEntity franchise;
         private List<IgdbNamedEntity> franchises;
+        private List<IgdbNamedEntity> collections;
         @JsonProperty("game_type")
         private IgdbGameType gameType;
         @JsonProperty("version_parent")
@@ -393,6 +456,16 @@ public class IgdbClient {
     @NoArgsConstructor
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class IgdbFranchise {
+        private Long id;
+        private String name;
+        private List<Long> games;
+    }
+
+    @Getter
+    @Setter
+    @NoArgsConstructor
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    public static class IgdbCollection {
         private Long id;
         private String name;
         private List<Long> games;

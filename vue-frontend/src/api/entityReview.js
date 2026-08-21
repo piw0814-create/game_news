@@ -13,6 +13,10 @@ export const entityReviewApi = {
     return api.post(`/api/admin/entity-reviews/${reviewId}/resolve`, payload, { timeout: 60000 })
   },
 
+  recheck(reviewId) {
+    return api.post(`/api/admin/entity-reviews/${reviewId}/recheck`, null, { timeout: 60000 })
+  },
+
   reopen(reviewId) {
     return api.post(`/api/admin/entity-reviews/${reviewId}/reopen`, null, { timeout: 60000 })
   }

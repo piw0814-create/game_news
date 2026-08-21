@@ -74,6 +74,7 @@ public class FranchiseAdminDto {
         private String displayName;
         private List<String> aliases;
         private Long igdbId;
+        private Long igdbCollectionId;
         private FranchiseMetadataSource metadataSource;
         private int gameCount;
         private int articleCount;
@@ -93,6 +94,7 @@ public class FranchiseAdminDto {
                     .displayName(franchise.getDisplayName())
                     .aliases(franchise.getAliases().stream().map(FranchiseAlias::getAlias).toList())
                     .igdbId(franchise.getIgdbId())
+                    .igdbCollectionId(franchise.getIgdbCollectionId())
                     .metadataSource(franchise.getMetadataSource())
                     .gameCount(gameCount)
                     .articleCount(articleCount)
@@ -114,6 +116,7 @@ public class FranchiseAdminDto {
         private String displayName;
         private List<String> aliases;
         private Long igdbId;
+        private Long igdbCollectionId;
         private FranchiseMetadataSource metadataSource;
         private OffsetDateTime lastSyncedAt;
         private List<GameLinkResponse> games;
@@ -135,6 +138,7 @@ public class FranchiseAdminDto {
                     .displayName(franchise.getDisplayName())
                     .aliases(franchise.getAliases().stream().map(FranchiseAlias::getAlias).toList())
                     .igdbId(franchise.getIgdbId())
+                    .igdbCollectionId(franchise.getIgdbCollectionId())
                     .metadataSource(franchise.getMetadataSource())
                     .lastSyncedAt(toUtc(franchise.getLastSyncedAt()))
                     .games(gameLinks.stream().map(GameLinkResponse::from).toList())
@@ -240,6 +244,7 @@ public class FranchiseAdminDto {
         private String name;
         private String displayName;
         private Long igdbId;
+        private Long igdbCollectionId;
         private BigDecimal similarityScore;
         private List<String> reasons;
     }
@@ -251,6 +256,7 @@ public class FranchiseAdminDto {
     public static class SyncResponse {
         private Long franchiseId;
         private Long igdbId;
+        private Long igdbCollectionId;
         private int igdbGameCount;
         private int createdGameCount;
         private int updatedGameCount;

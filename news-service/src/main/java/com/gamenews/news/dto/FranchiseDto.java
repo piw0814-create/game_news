@@ -28,6 +28,7 @@ public class FranchiseDto {
         private String displayName;
         private List<String> aliases;
         private Long igdbId;
+        private Long igdbCollectionId;
         private FranchiseMetadataSource metadataSource;
         private OffsetDateTime createdAt;
         private OffsetDateTime updatedAt;
@@ -39,6 +40,7 @@ public class FranchiseDto {
                     .displayName(franchise.getDisplayName())
                     .aliases(franchise.getAliases().stream().map(FranchiseAlias::getAlias).toList())
                     .igdbId(franchise.getIgdbId())
+                    .igdbCollectionId(franchise.getIgdbCollectionId())
                     .metadataSource(franchise.getMetadataSource())
                     .createdAt(toUtc(franchise.getCreatedAt()))
                     .updatedAt(toUtc(franchise.getUpdatedAt()))

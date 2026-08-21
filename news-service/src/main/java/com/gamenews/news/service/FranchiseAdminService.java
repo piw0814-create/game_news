@@ -133,6 +133,10 @@ public class FranchiseAdminService {
                 && !source.getIgdbId().equals(target.getIgdbId())) {
             throw new IllegalArgumentException("서로 다른 IGDB ID가 연결된 프랜차이즈는 병합할 수 없습니다");
         }
+        if (source.getIgdbCollectionId() != null && target.getIgdbCollectionId() != null
+                && !source.getIgdbCollectionId().equals(target.getIgdbCollectionId())) {
+            throw new IllegalArgumentException("서로 다른 IGDB Collection ID가 연결된 프랜차이즈는 병합할 수 없습니다");
+        }
 
         List<String> sourceIdentities = new ArrayList<>();
         sourceIdentities.add(source.getName());
@@ -140,6 +144,8 @@ public class FranchiseAdminService {
         source.getAliases().forEach(alias -> sourceIdentities.add(alias.getAlias()));
         Long inheritedIgdbId = target.getIgdbId() == null ? source.getIgdbId() : null;
         String inheritedIgdbName = inheritedIgdbId == null ? null : source.getName();
+        Long inheritedCollectionId = target.getIgdbCollectionId() == null ? source.getIgdbCollectionId() : null;
+        String inheritedCollectionName = inheritedCollectionId == null ? null : source.getName();
 
         mergeGameLinks(source, target);
         mergeArticleLinks(source, target);
@@ -152,6 +158,9 @@ public class FranchiseAdminService {
         franchiseRepository.flush();
 
         if (inheritedIgdbId != null) target.applyIgdbIdentity(inheritedIgdbId, inheritedIgdbName);
+        if (inheritedCollectionId != null) {
+            target.applyIgdbCollectionIdentity(inheritedCollectionId, inheritedCollectionName);
+        }
         for (String identity : sourceIdentities) {
             String alias = normalizeOptional(identity);
             if (alias == null || identityUsedByOther(target.getId(), alias)) continue;
@@ -231,6 +240,7 @@ public class FranchiseAdminService {
                             .name(candidate.getName())
                             .displayName(candidate.getDisplayName())
                             .igdbId(candidate.getIgdbId())
+                            .igdbCollectionId(candidate.getIgdbCollectionId())
                             .similarityScore(BigDecimal.valueOf(result.score()).setScale(4, RoundingMode.HALF_UP))
                             .reasons(result.reasons())
                             .build();
@@ -295,6 +305,7 @@ public class FranchiseAdminService {
     private String searchableText(Franchise franchise) {
         List<String> values = new ArrayList<>(identities(franchise));
         if (franchise.getIgdbId() != null) values.add(String.valueOf(franchise.getIgdbId()));
+        if (franchise.getIgdbCollectionId() != null) values.add(String.valueOf(franchise.getIgdbCollectionId()));
         return String.join(" ", values).toLowerCase(Locale.ROOT);
     }
 
