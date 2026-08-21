@@ -76,7 +76,7 @@ def test_article_analysis_retries_once_after_validation_error():
     analyzer._client = fake_client
     analyzer._get_client = lambda: fake_client
 
-    result = analyzer.analyze(_article(), [], [])
+    result = analyzer.analyze(_article())
 
     assert result.category.value == "UPDATE"
     assert fake_client.responses.calls == 2
@@ -89,7 +89,7 @@ def test_article_analysis_raises_after_second_validation_error():
     analyzer._get_client = lambda: fake_client
 
     try:
-        analyzer.analyze(_article(), [], [])
+        analyzer.analyze(_article())
     except ValidationError:
         pass
     else:

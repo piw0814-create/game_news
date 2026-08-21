@@ -80,18 +80,47 @@ public class NewsService {
 
     public List<NewsArticleDto.NewsArticleResponse> getRecoveryCandidates(
             int limit,
-            int processingStaleMinutes) {
+            int processingStaleMinutes,
+            int pendingStaleMinutes,
+            List<Long> excludeIds) {
         int normalizedLimit = Math.max(1, Math.min(limit, 100));
-        int normalizedStaleMinutes = Math.max(1, Math.min(processingStaleMinutes, 1440));
-        LocalDateTime staleBefore = LocalDateTime.now(ZoneOffset.UTC)
-                .minusMinutes(normalizedStaleMinutes);
+        int normalizedProcessingStaleMinutes = Math.max(1, Math.min(processingStaleMinutes, 1440));
+        boolean includeFreshPending = pendingStaleMinutes <= 0;
+        int normalizedPendingStaleMinutes = Math.max(1, Math.min(pendingStaleMinutes, 1440));
 
-        return newsArticleRepository.findRecoveryCandidates(
-                        List.of(AnalysisStatus.PENDING, AnalysisStatus.FAILED),
+        LocalDateTime now = LocalDateTime.now(ZoneOffset.UTC);
+        LocalDateTime processingStaleBefore = now.minusMinutes(normalizedProcessingStaleMinutes);
+        LocalDateTime pendingStaleBefore = now.minusMinutes(normalizedPendingStaleMinutes);
+
+        List<Long> normalizedExcludeIds = excludeIds == null
+                ? List.of(-1L)
+                : excludeIds.stream()
+                        .filter(java.util.Objects::nonNull)
+                        .distinct()
+                        .limit(500)
+                        .toList();
+        if (normalizedExcludeIds.isEmpty()) {
+            normalizedExcludeIds = List.of(-1L);
+        }
+
+        List<NewsArticle> candidates = includeFreshPending
+                ? newsArticleRepository.findStartupRecoveryCandidates(
+                        AnalysisStatus.PENDING,
+                        AnalysisStatus.FAILED,
                         AnalysisStatus.PROCESSING,
-                        staleBefore,
+                        processingStaleBefore,
+                        normalizedExcludeIds,
                         PageRequest.of(0, normalizedLimit))
-                .stream()
+                : newsArticleRepository.findPeriodicRecoveryCandidates(
+                        AnalysisStatus.PENDING,
+                        AnalysisStatus.FAILED,
+                        AnalysisStatus.PROCESSING,
+                        pendingStaleBefore,
+                        processingStaleBefore,
+                        normalizedExcludeIds,
+                        PageRequest.of(0, normalizedLimit));
+
+        return candidates.stream()
                 .map(NewsArticleDto.NewsArticleResponse::from)
                 .toList();
     }

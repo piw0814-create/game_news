@@ -2,7 +2,12 @@ import logging
 
 from app.client.news_client import NewsServiceError, news_client
 from app.client.openai_client import openai_article_analyzer
-from app.model.schemas import AnalysisStatus, ArticleEntityType, EntityResolutionOutcome
+from app.model.schemas import (
+    AnalysisStatus,
+    ArticleEntityType,
+    EntityResolutionOutcome,
+    TopicIntegrationAction,
+)
 from app.service.topic_analysis_service import topic_analysis_service
 from app.service.topic_integration_service import topic_integration_service
 
@@ -48,9 +53,7 @@ class ArticleAnalysisService:
                 article_id,
             )
 
-            games = news_client.get_games()
-            franchises = news_client.get_franchises()
-            analysis = openai_article_analyzer.analyze(article, games, franchises)
+            analysis = openai_article_analyzer.analyze(article)
 
             if not analysis.gameNewsRelevant:
                 completed = news_client.update_analysis(
@@ -75,10 +78,36 @@ class ArticleAnalysisService:
                 getattr(analysis.entityType, "value", analysis.entityType),
             )
 
-            self._link_games(article_id, analysis, games)
-            self._link_franchises(article_id, analysis, franchises)
+            self._link_games(article_id, analysis)
+            self._link_franchises(article_id, analysis)
 
-            topic_result = topic_integration_service.integrate(article, analysis)
+            initial_topic_ready = self._has_initial_topic_analysis(analysis)
+            initial_importance_score = None
+            if initial_topic_ready:
+                official_bonus, source_bonus, community_penalty, initial_importance_score = (
+                    topic_analysis_service.score_initial_importance(
+                        analysis.semanticImportanceScore,
+                        article.sourceName,
+                        article.sourceType,
+                    )
+                )
+                logger.info(
+                    "[ArticleAnalysis] 새 Topic 초기 중요도 계산 - articleId=%s semantic=%s "
+                    "officialBonus=%s sourceBonus=%s communityPenalty=%s final=%s",
+                    article_id,
+                    analysis.semanticImportanceScore,
+                    official_bonus,
+                    source_bonus,
+                    community_penalty,
+                    initial_importance_score,
+                )
+
+            topic_result = topic_integration_service.integrate(
+                article,
+                analysis,
+                initial_importance_score=initial_importance_score,
+                initial_why_important=analysis.whyImportant if initial_topic_ready else None,
+            )
             logger.info(
                 "[ArticleAnalysis] Topic 통합 완료 - articleId=%s topicId=%s action=%s",
                 article_id,
@@ -101,23 +130,34 @@ class ArticleAnalysisService:
                 completed.analysisStatus.value,
             )
 
-            try:
-                topic_analysis = topic_analysis_service.reanalyze(topic_result.topicId)
+            if not self._should_reanalyze_topic(
+                topic_result.action,
+                initial_topic_ready,
+            ):
                 logger.info(
-                    "[ArticleAnalysis] Topic 재분석 완료 - articleId=%s topicId=%s importanceScore=%s",
+                    "[ArticleAnalysis] 단일 기사 새 Topic은 Article AI 초기 분석 재사용 - "
+                    "articleId=%s topicId=%s TopicAnalyzer=SKIPPED",
                     article_id,
                     topic_result.topicId,
-                    topic_analysis.importanceScore,
                 )
-            except Exception as exc:
-                # Topic 파생 분석 실패는 이미 완료된 기사/Topic 관계를 롤백하지 않는다.
-                logger.exception(
-                    "[ArticleAnalysis] Topic 재분석 실패 - articleId=%s topicId=%s "
-                    "기존 Topic 분석 정보 유지 error=%s",
-                    article_id,
-                    topic_result.topicId,
-                    exc,
-                )
+            else:
+                try:
+                    topic_analysis = topic_analysis_service.reanalyze(topic_result.topicId)
+                    logger.info(
+                        "[ArticleAnalysis] Topic 재분석 완료 - articleId=%s topicId=%s importanceScore=%s",
+                        article_id,
+                        topic_result.topicId,
+                        topic_analysis.importanceScore,
+                    )
+                except Exception as exc:
+                    # Topic 파생 분석 실패는 이미 완료된 기사/Topic 관계를 롤백하지 않는다.
+                    logger.exception(
+                        "[ArticleAnalysis] Topic 재분석 실패 - articleId=%s topicId=%s "
+                        "기존 Topic 분석 정보 유지 error=%s",
+                        article_id,
+                        topic_result.topicId,
+                        exc,
+                    )
 
             return True
 
@@ -129,7 +169,25 @@ class ArticleAnalysisService:
             )
             return self._mark_failed(article_id)
 
-    def _link_games(self, article_id: int, analysis, games) -> None:
+    def _should_reanalyze_topic(
+        self,
+        action: TopicIntegrationAction,
+        initial_topic_ready: bool,
+    ) -> bool:
+        return not (
+            action == TopicIntegrationAction.CREATED_NEW
+            and initial_topic_ready
+        )
+
+    def _has_initial_topic_analysis(self, analysis) -> bool:
+        if not getattr(analysis, "gameNewsRelevant", False):
+            return False
+        title = (getattr(analysis, "topicTitle", None) or "").strip()
+        why_important = (getattr(analysis, "whyImportant", None) or "").strip()
+        semantic_score = getattr(analysis, "semanticImportanceScore", None)
+        return bool(title and why_important and semantic_score is not None)
+
+    def _link_games(self, article_id: int, analysis) -> None:
         article_entity_type = self._entity_type(
             getattr(analysis, "entityType", ArticleEntityType.MIXED),
             ArticleEntityType.MIXED,
@@ -187,7 +245,7 @@ class ArticleAnalysisService:
                     article_id, related_game.name, related_game.confidenceScore,
                 )
 
-    def _link_franchises(self, article_id: int, analysis, franchises) -> None:
+    def _link_franchises(self, article_id: int, analysis) -> None:
         article_entity_type = self._entity_type(
             getattr(analysis, "entityType", ArticleEntityType.MIXED),
             ArticleEntityType.MIXED,

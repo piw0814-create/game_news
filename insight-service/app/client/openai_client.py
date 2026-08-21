@@ -1,14 +1,11 @@
 import logging
-from typing import List
-
 from openai import OpenAI
 from pydantic import ValidationError
 
 from app.config.settings import settings
+from app.client.openai_usage import log_openai_usage
 from app.model.schemas import (
     ArticleAnalysisResult,
-    FranchiseResponse,
-    GameResponse,
     NewsArticleResponse,
 )
 
@@ -28,11 +25,9 @@ class OpenAIArticleAnalyzer:
     def analyze(
         self,
         article: NewsArticleResponse,
-        known_games: List[GameResponse],
-        known_franchises: List[FranchiseResponse],
     ) -> ArticleAnalysisResult:
         client = self._get_client()
-        prompt = self._build_prompt(article, known_games, known_franchises)
+        prompt = self._build_prompt(article)
 
         logger.info(
             "[OpenAI] 기사 분석 시작 - articleId=%s model=%s",
@@ -51,15 +46,18 @@ class OpenAIArticleAnalyzer:
                             "content": (
                                 "You analyze game-news articles for a Korean game intelligence feed. "
                                 "Return only the requested structured result. "
-                                "Do not perform Topic grouping, importance scoring, or why-important analysis. "
-                                "Use only facts supported by the supplied article."
+                                "Do not group this article with other articles. "
+                                "For relevant articles, also produce the initial single-article Topic title, semantic importance, and why-important fields. "
+                                "Use only facts supported by the supplied article and do not use outside popularity or market knowledge."
                             ),
                         },
                         {"role": "user", "content": prompt},
                     ],
                     text_format=ArticleAnalysisResult,
                     max_output_tokens=settings.openai_max_output_tokens,
+                    prompt_cache_key="game-intelligence:article-analysis:v2",
                 )
+                log_openai_usage(response, "article", article.id)
 
                 result = response.output_parsed
                 if result is None:
@@ -109,32 +107,9 @@ class OpenAIArticleAnalyzer:
     def _build_prompt(
         self,
         article: NewsArticleResponse,
-        known_games: List[GameResponse],
-        known_franchises: List[FranchiseResponse],
     ) -> str:
         content = (article.content or "").strip()
         content = content[: settings.openai_max_content_chars]
-
-        game_lines = []
-        for game in known_games[: settings.openai_known_games_limit]:
-            display = game.displayName or "-"
-            aliases = ", ".join(game.aliases) if game.aliases else "-"
-            developer = game.developer or "-"
-            publisher = game.publisher or "-"
-            game_lines.append(
-                f"- canonical: {game.name} | display: {display} | aliases: {aliases} "
-                f"| developer: {developer} | publisher: {publisher}"
-            )
-        known_game_text = "\n".join(game_lines) or "- (none)"
-
-        franchise_lines = []
-        for franchise in known_franchises[: settings.openai_known_franchises_limit]:
-            display = franchise.displayName or "-"
-            aliases = ", ".join(franchise.aliases) if franchise.aliases else "-"
-            franchise_lines.append(
-                f"- canonical: {franchise.name} | display: {display} | aliases: {aliases}"
-            )
-        known_franchise_text = "\n".join(franchise_lines) or "- (none)"
 
         return f"""
 Analyze this single game-news article.
@@ -154,26 +129,33 @@ Rules:
 - High confidence does NOT override entity type. Being 98% sure that an article is about the Mass Effect IP does not mean the specific 2007 game Mass Effect was identified.
 - summary: write a concise Korean summary in 2 to 4 sentences.
 - category: choose exactly one of RELEASE, UPDATE, INDUSTRY, ESPORTS, EVENT, CONTROVERSY, OTHER.
+- For gameNewsRelevant=true, also prepare the initial Topic presentation from this single article only:
+  - topicTitle: concise Korean event title representing the concrete event, not a translated publisher headline and not clickbait.
+  - semanticImportanceScore: integer 0 to 50 for the concrete event itself. 0-9 trivial, 10-19 narrow, 20-29 ordinary, 30-39 meaningful, 40-44 major, 45-50 exceptional with clearly supported direct consequences.
+  - whyImportant: Korean 1 to 2 sentences explaining practical impact or consequence without repeating the summary.
+- semanticImportanceScore must NOT increase because of source count, OFFICIAL source type, famous IP/company, assumed sales, market size, or popularity. Code applies objective source signals separately.
+- If gameNewsRelevant=false, topicTitle, semanticImportanceScore, and whyImportant must be null.
+- Source provenance is literal: only Source type=OFFICIAL is an official source. A MEDIA/COMMUNITY article reporting a company announcement must not be described as an official source.
 - keywords: return 3 to 8 useful search/matching keywords. Avoid generic words such as game/news/article.
 - relatedGames: include only SPECIFIC_GAME entries directly discussed by the article, maximum 5. Every relatedGames item must use entityType=SPECIFIC_GAME.
 - Never use a franchise name as a substitute game title when the article means "the next/new/upcoming [franchise] game" and the actual entry title is not identified.
-- For an unnamed future entry, do NOT create/return a Game named only after the franchise. Instead set the article entityType to UNNAMED_ENTRY and return the explicitly identified franchise in relatedFranchises with entityType=UNNAMED_ENTRY. Known franchises are hints, not a whitelist; the backend verifies unknown names against IGDB before linking.
+- For an unnamed future entry, do NOT create/return a Game named only after the franchise. Instead set the article entityType to UNNAMED_ENTRY and return the explicitly identified franchise in relatedFranchises with entityType=UNNAMED_ENTRY. The backend verifies extracted identities against Local Catalog/IGDB before linking.
 - A matching word or phrase alone is NOT enough to identify a game. Confirm from article context that the subject is actually that game.
 - Be especially conservative with ambiguous/common-word game titles or short aliases such as Control, Inside, Rust, Split, Marathon, Deadlock, GTA, CS, or NTE.
 - Example: "The company lost control of development costs." -> do NOT return the game Control.
 - Example: "Remedy released a new update for Control." -> Control is a valid related game.
 - Example: "Rust continues to affect the server." -> do NOT return the game Rust unless the article context is clearly about Facepunch's game.
 - Example: "Facepunch announced a Rust gameplay update." -> Rust is a valid related game.
-- If the article refers to a Known game by its canonical name, display name, or any alias, return the canonical name from that Known game entry. Use developer/publisher context when it helps disambiguate an ambiguous title.
-- A specific game explicitly named by the article may be returned even when it is not in Known games. Do not guess from vague wording; the backend will verify the returned name against IGDB and route ambiguous matches to admin review.
+- Extract the most explicit game title supported by the article. Use developer/publisher context when it helps disambiguate an ambiguous title. Do not force a guessed canonical spelling that the article does not support; the backend resolves canonical identity.
+- A specific game explicitly named by the article may be returned. Do not guess from vague wording; the backend will verify the returned name against Local Catalog/IGDB and route ambiguous matches to admin review.
 - If the article is industry-level news with no specific game, relatedGames must be empty.
 - relatedFranchises is separate from relatedGames. Use entityType=FRANCHISE when the article directly discusses an IP/franchise as a whole, and entityType=UNNAMED_ENTRY when it discusses a future/new entry whose specific title is not identified.
 - Do NOT infer a specific sequel/entry when the article only refers to a franchise/series name or says "next", "new", "future", "upcoming", "new entry", "next installment", or equivalent wording without a specific official title.
 - Do NOT add a franchise merely because a related game belongs to it. A specific-game-only article should normally have relatedFranchises=[] even if that game's franchise is known.
-- If a franchise-level claim is itself central to the article (for example franchise-wide sales, anniversary, brand strategy, cross-entry licensing), return that Known franchise using its canonical name.
-- Known franchises are identity hints, not a whitelist. If the article clearly names a franchise/IP that is not in Known franchises, you may return that explicit name; never invent a franchise that the article does not support. The backend performs IGDB verification and sends ambiguous matches to admin review.
+- If a franchise-level claim is itself central to the article (for example franchise-wide sales, anniversary, brand strategy, cross-entry licensing), return the franchise name explicitly supported by the article.
+- If the article clearly names a franchise/IP, you may return that explicit name; never invent a franchise that the article does not support. The backend performs Local Catalog/IGDB verification and sends ambiguous matches to admin review.
 - If the article explicitly and centrally discusses both franchise-wide information and one or more specific games, relatedGames and relatedFranchises may both be populated.
-- Example: "The GTA franchise surpassed 500 million sales." -> entityType=FRANCHISE; relatedGames=[]; relatedFranchises may contain Grand Theft Auto with entityType=FRANCHISE. Use a Known canonical identity when available; otherwise use only the explicit article-supported franchise name.
+- Example: "The GTA franchise surpassed 500 million sales." -> entityType=FRANCHISE; relatedGames=[]; relatedFranchises may contain GTA with entityType=FRANCHISE. The backend resolves that extracted name to the canonical franchise identity.
 - Example: "Rockstar reveals new GTA VI details." -> entityType=SPECIFIC_GAME; relatedGames may contain Grand Theft Auto VI with entityType=SPECIFIC_GAME; relatedFranchises=[] unless the article separately discusses the franchise as a whole.
 - Example: "The next Mass Effect game is still years away." -> entityType=UNNAMED_ENTRY; relatedGames=[]; relatedFranchises=[Mass Effect with entityType=UNNAMED_ENTRY]. Do NOT return/create the specific 2007 game Mass Effect merely because that franchise name appears.
 - Example: "BioWare is developing the next Mass Effect, but no official title has been announced." -> UNNAMED_ENTRY, not the 2007 game Mass Effect.
@@ -188,15 +170,10 @@ Rules:
 - When uncertain whether a common word is a game title, omit it from relatedGames rather than guessing.
 - Do not invent facts not contained in the article.
 
-Known games:
-{known_game_text}
-
-Known franchises:
-{known_franchise_text}
-
 Article:
 Title: {article.title}
 Source: {article.sourceName}
+Source type: {article.sourceType}
 Published at: {article.publishedAt or "unknown"}
 Content:
 {content or "(no body text; analyze from title only)"}

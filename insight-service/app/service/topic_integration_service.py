@@ -8,6 +8,7 @@ from app.client.openai_topic_matcher import openai_topic_matcher
 from app.config.settings import settings
 from app.model.schemas import (
     ArticleAnalysisResult,
+    ArticleEntityType,
     NewsArticleResponse,
     TopicCandidateResponse,
     TopicIntegrationResponse,
@@ -23,22 +24,29 @@ class TopicIntegrationService:
         self,
         article: NewsArticleResponse,
         analysis: ArticleAnalysisResult,
+        initial_importance_score: int | None = None,
+        initial_why_important: str | None = None,
     ) -> TopicIntegrationResponse:
+        allow_recent_fallback = analysis.entityType == ArticleEntityType.NONE
         candidates = news_client.get_topic_candidates(
             article_id=article.id,
             window_hours=settings.topic_candidate_window_hours,
             limit=settings.topic_candidate_db_limit,
+            allow_recent_fallback=allow_recent_fallback,
         )
 
         logger.info(
-            "[TopicIntegration] 후보 조회 - articleId=%s window=%sh dbCandidates=%s",
+            "[TopicIntegration] 후보 조회 - articleId=%s window=%sh dbCandidates=%s recentFallback=%s",
             article.id,
             settings.topic_candidate_window_hours,
             len(candidates),
+            allow_recent_fallback,
         )
 
         if not candidates:
-            return self._create_new_topic(article, analysis, "후보 없음")
+            return self._create_new_topic(
+                article, analysis, "후보 없음", initial_importance_score, initial_why_important
+            )
 
         ranked = self._rank_candidates(article, analysis, candidates)
         ai_candidates = ranked[: settings.topic_candidate_ai_limit]
@@ -62,6 +70,8 @@ class TopicIntegrationService:
                 article,
                 analysis,
                 f"AI matcher failure fallback - {type(exc).__name__}",
+                initial_importance_score,
+                initial_why_important,
             )
 
         candidate_ids = {candidate.id for candidate in ai_candidates}
@@ -91,20 +101,27 @@ class TopicIntegrationService:
             f"AI no-match/threshold - sameEvent={match.sameEvent} "
             f"topicId={match.matchedTopicId} confidence={match.confidenceScore:.2f}"
         )
-        return self._create_new_topic(article, analysis, reason)
+        return self._create_new_topic(
+            article, analysis, reason, initial_importance_score, initial_why_important
+        )
 
     def _create_new_topic(
         self,
         article: NewsArticleResponse,
         analysis: ArticleAnalysisResult,
         reason: str,
+        initial_importance_score: int | None,
+        initial_why_important: str | None,
     ) -> TopicIntegrationResponse:
+        initial_title = (analysis.topicTitle or "").strip() or article.title
         result = news_client.integrate_topic(
             article_id=article.id,
             target_topic_id=None,
-            title=article.title,
+            title=initial_title,
             summary=analysis.summary,
             category=analysis.category,
+            importance_score=initial_importance_score,
+            why_important=initial_why_important,
         )
         logger.info(
             "[TopicIntegration] 새 Topic 처리 - articleId=%s topicId=%s action=%s reason=%s",

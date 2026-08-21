@@ -8,21 +8,14 @@ import com.gamenews.news.entity.Game;
 import com.gamenews.news.entity.GameFranchise;
 import com.gamenews.news.entity.GameFranchiseSource;
 import com.gamenews.news.entity.GameRegistrationSource;
-import com.gamenews.news.event.FranchiseResolvedEvent;
 import com.gamenews.news.repository.FranchiseRepository;
 import com.gamenews.news.repository.GameFranchiseRepository;
 import com.gamenews.news.repository.GameRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.event.TransactionPhase;
-import org.springframework.transaction.event.TransactionalEventListener;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -36,26 +29,11 @@ import java.util.Set;
 @Slf4j
 public class FranchiseCatalogSyncService {
 
-    private static final Duration AUTO_SYNC_INTERVAL = Duration.ofHours(24);
-
     private final IgdbClient igdbClient;
     private final FranchiseRepository franchiseRepository;
     private final GameRepository gameRepository;
     private final GameFranchiseRepository gameFranchiseRepository;
     private final GameEnrichmentService gameEnrichmentService;
-
-
-    @Async
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
-    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
-    public void onFranchiseResolved(FranchiseResolvedEvent event) {
-        try {
-            syncIfStale(event.franchiseId());
-        } catch (RuntimeException ex) {
-            log.warn("[IGDB Auto] Franchise refresh failed - franchiseId={}, reason={}",
-                    event.franchiseId(), ex.getMessage());
-        }
-    }
 
     @Transactional
     public FranchiseAdminDto.SyncResponse sync(Long franchiseId) {
@@ -109,15 +87,6 @@ public class FranchiseCatalogSyncService {
                 .removedRelationCount(removed)
                 .lastSyncedAt(FranchiseAdminDto.toUtc(franchise.getLastSyncedAt()))
                 .build();
-    }
-
-    @Transactional
-    public void syncIfStale(Long franchiseId) {
-        Franchise franchise = findFranchise(franchiseId);
-        if (franchise.getIgdbId() == null && !tryAttachExactIgdbIdentity(franchise)) return;
-        LocalDateTime cutoff = LocalDateTime.now().minus(AUTO_SYNC_INTERVAL);
-        if (franchise.getLastSyncedAt() != null && franchise.getLastSyncedAt().isAfter(cutoff)) return;
-        sync(franchiseId);
     }
 
     private UpsertResult findOrCreateGame(IgdbClient.IgdbGame rawGame) {

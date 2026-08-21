@@ -43,9 +43,15 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("[Kafka] Consumer 시작 실패: %s", exc)
 
+    try:
+        article_recovery_service.start_periodic()
+    except Exception as exc:
+        logger.warning("[ArticleRecovery] periodic 시작 실패: %s", exc)
+
     yield
 
     logger.info("[%s] 서비스 종료", settings.app_name)
+    article_recovery_service.stop_periodic()
     news_created_consumer.stop()
     await eureka_client.stop_async()
 

@@ -55,7 +55,7 @@ class ArticleEntityResolutionTest(unittest.TestCase):
         )
 
         with patch("app.service.article_analysis_service.news_client", fake):
-            self.service._link_games(11, analysis, [])
+            self.service._link_games(11, analysis)
 
         self.assertEqual(1, len(fake.game_resolve_calls))
         call = fake.game_resolve_calls[0]
@@ -78,7 +78,7 @@ class ArticleEntityResolutionTest(unittest.TestCase):
         )
 
         with patch("app.service.article_analysis_service.news_client", fake):
-            self.service._link_games(50, analysis, [])
+            self.service._link_games(50, analysis)
 
         self.assertEqual(1, len(fake.game_resolve_calls))
 
@@ -96,7 +96,7 @@ class ArticleEntityResolutionTest(unittest.TestCase):
         )
 
         with patch("app.service.article_analysis_service.news_client", fake):
-            self.service._link_games(41, analysis, [])
+            self.service._link_games(41, analysis)
 
         self.assertEqual([], fake.game_resolve_calls)
 
@@ -114,7 +114,7 @@ class ArticleEntityResolutionTest(unittest.TestCase):
         )
 
         with patch("app.service.article_analysis_service.news_client", fake):
-            self.service._link_franchises(20, analysis, [])
+            self.service._link_franchises(20, analysis)
 
         self.assertEqual(1, len(fake.franchise_resolve_calls))
         self.assertEqual("Resident Evil", fake.franchise_resolve_calls[0]["detected_name"])
@@ -134,8 +134,8 @@ class ArticleEntityResolutionTest(unittest.TestCase):
         )
 
         with patch("app.service.article_analysis_service.news_client", fake):
-            self.service._link_games(42, analysis, [])
-            self.service._link_franchises(42, analysis, [])
+            self.service._link_games(42, analysis)
+            self.service._link_franchises(42, analysis)
 
         self.assertEqual([], fake.game_resolve_calls)
         self.assertEqual(1, len(fake.franchise_resolve_calls))
@@ -155,7 +155,7 @@ class ArticleEntityResolutionTest(unittest.TestCase):
         )
 
         with patch("app.service.article_analysis_service.news_client", fake):
-            self.service._link_franchises(43, analysis, [])
+            self.service._link_franchises(43, analysis)
 
         self.assertEqual([], fake.franchise_resolve_calls)
 

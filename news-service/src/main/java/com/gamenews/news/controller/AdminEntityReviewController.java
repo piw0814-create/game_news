@@ -42,6 +42,11 @@ public class AdminEntityReviewController {
         return ResponseEntity.ok(ApiResponse.success(entityReviewService.resolveAdmin(id, request)));
     }
 
+    @PostMapping("/{id}/recheck")
+    public ResponseEntity<ApiResponse<EntityReviewDto.AdminResponse>> recheck(@PathVariable Long id) {
+        return ResponseEntity.ok(ApiResponse.success(entityReviewService.recheckAdmin(id)));
+    }
+
     @PostMapping("/{id}/reopen")
     public ResponseEntity<ApiResponse<EntityReviewDto.AdminResponse>> reopen(@PathVariable Long id) {
         return ResponseEntity.ok(ApiResponse.success(entityReviewService.reopenAdmin(id)));

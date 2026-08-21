@@ -32,6 +32,13 @@ public class TopicIntegrationDto {
         @Min(value = 1, message = "후보 개수는 1개 이상이어야 합니다")
         @Max(value = 50, message = "후보 개수는 50개 이하여야 합니다")
         private int limit;
+
+        /**
+         * Game/Franchise 엔티티로 후보를 좁힐 수 없는 산업/정책 기사에서만
+         * 최근 Topic fallback을 허용한다. 미지정 시 기존 호출자 호환을 위해 true.
+         */
+        @Builder.Default
+        private boolean allowRecentFallback = true;
     }
 
     @Getter
@@ -71,6 +78,12 @@ public class TopicIntegrationDto {
         private String title;
         private String summary;
         private NewsCategory category;
+
+        @Min(value = 0, message = "초기 중요도는 0 이상이어야 합니다")
+        @Max(value = 100, message = "초기 중요도는 100 이하여야 합니다")
+        private Integer initialImportanceScore;
+
+        private String initialWhyImportant;
     }
 
     public enum IntegrationAction {

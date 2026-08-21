@@ -171,6 +171,23 @@ class ArticleAnalysisResult(BaseModel):
     )
     summary: str = Field(description="한국어 2~4문장의 간결한 기사 요약")
     category: NewsCategory
+    topicTitle: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        max_length=500,
+        description="게임뉴스 관련 기사일 때 단일 기사 기반 초기 Topic의 간결한 한국어 사건 제목",
+    )
+    semanticImportanceScore: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=50,
+        description="게임뉴스 관련 기사일 때 기사 수/출처 가중치를 제외한 사건 자체의 초기 의미 중요도",
+    )
+    whyImportant: Optional[str] = Field(
+        default=None,
+        min_length=1,
+        description="게임뉴스 관련 기사일 때 사건의 영향이나 실질적 의미를 설명하는 한국어 1~2문장",
+    )
     keywords: List[str] = Field(
         min_length=3,
         max_length=8,
@@ -193,6 +210,9 @@ class ArticleAnalysisResult(BaseModel):
             self.entityType = ArticleEntityType.NONE
             self.relatedGames = []
             self.relatedFranchises = []
+            self.topicTitle = None
+            self.semanticImportanceScore = None
+            self.whyImportant = None
             return self
 
         if self.entityType == ArticleEntityType.NONE:

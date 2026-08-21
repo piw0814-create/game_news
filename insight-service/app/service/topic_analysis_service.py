@@ -80,6 +80,17 @@ class TopicAnalysisService:
             whyImportant=semantic.whyImportant,
         )
 
+    def score_initial_importance(
+        self,
+        semantic_score: int,
+        source_name: str,
+        source_type: str,
+    ) -> tuple[int, int, int, int]:
+        """단일 기사 새 Topic에 기존 중요도 보정 공식을 동일하게 적용한다."""
+        source_types = [source_type.strip().upper()]
+        source_names = [source_name]
+        return self._score_importance_signals(semantic_score, source_types, source_names)
+
     def _select_articles(
         self,
         context: TopicAnalysisContextResponse,
@@ -100,13 +111,24 @@ class TopicAnalysisService:
         semantic_score: int,
         articles: List[TopicAnalysisArticleContext],
     ) -> tuple[int, int, int, int]:
-        source_types = [article.sourceType.strip().upper() for article in articles]
+        return self._score_importance_signals(
+            semantic_score,
+            [article.sourceType.strip().upper() for article in articles],
+            [article.sourceName for article in articles],
+        )
+
+    def _score_importance_signals(
+        self,
+        semantic_score: int,
+        source_types: List[str],
+        source_names: List[str],
+    ) -> tuple[int, int, int, int]:
         official_bonus = self.OFFICIAL_BONUS if "OFFICIAL" in source_types else 0
 
         unique_sources = {
-            article.sourceName.strip().casefold()
-            for article in articles
-            if article.sourceName and article.sourceName.strip()
+            source_name.strip().casefold()
+            for source_name in source_names
+            if source_name and source_name.strip()
         }
         source_count = len(unique_sources)
         if source_count >= 4:

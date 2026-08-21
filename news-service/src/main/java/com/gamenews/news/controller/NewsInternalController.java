@@ -30,8 +30,14 @@ public class NewsInternalController {
     @GetMapping("/recovery-candidates")
     public ResponseEntity<ApiResponse<List<NewsArticleDto.NewsArticleResponse>>> getRecoveryCandidates(
             @RequestParam(defaultValue = "20") int limit,
-            @RequestParam(defaultValue = "15") int processingStaleMinutes) {
+            @RequestParam(defaultValue = "15") int processingStaleMinutes,
+            @RequestParam(defaultValue = "0") int pendingStaleMinutes,
+            @RequestParam(required = false) List<Long> excludeIds) {
         return ResponseEntity.ok(ApiResponse.success(
-                newsService.getRecoveryCandidates(limit, processingStaleMinutes)));
+                newsService.getRecoveryCandidates(
+                        limit,
+                        processingStaleMinutes,
+                        pendingStaleMinutes,
+                        excludeIds)));
     }
 }

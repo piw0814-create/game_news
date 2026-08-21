@@ -23,16 +23,48 @@ public interface NewsArticleRepository extends JpaRepository<NewsArticle, Long> 
     @Query("""
             SELECT article
             FROM NewsArticle article
-            WHERE article.analysisStatus IN :retryableStatuses
-               OR (
-                    article.analysisStatus = :processingStatus
-                    AND article.updatedAt < :staleBefore
-               )
+            WHERE article.id NOT IN :excludedIds
+              AND (
+                    article.analysisStatus = :pendingStatus
+                    OR article.analysisStatus = :failedStatus
+                    OR (
+                        article.analysisStatus = :processingStatus
+                        AND article.updatedAt < :processingStaleBefore
+                    )
+              )
             ORDER BY article.updatedAt ASC
             """)
-    List<NewsArticle> findRecoveryCandidates(
-            @Param("retryableStatuses") List<AnalysisStatus> retryableStatuses,
+    List<NewsArticle> findStartupRecoveryCandidates(
+            @Param("pendingStatus") AnalysisStatus pendingStatus,
+            @Param("failedStatus") AnalysisStatus failedStatus,
             @Param("processingStatus") AnalysisStatus processingStatus,
-            @Param("staleBefore") LocalDateTime staleBefore,
+            @Param("processingStaleBefore") LocalDateTime processingStaleBefore,
+            @Param("excludedIds") List<Long> excludedIds,
+            Pageable pageable);
+
+    @Query("""
+            SELECT article
+            FROM NewsArticle article
+            WHERE article.id NOT IN :excludedIds
+              AND (
+                    article.analysisStatus = :failedStatus
+                    OR (
+                        article.analysisStatus = :pendingStatus
+                        AND article.updatedAt < :pendingStaleBefore
+                    )
+                    OR (
+                        article.analysisStatus = :processingStatus
+                        AND article.updatedAt < :processingStaleBefore
+                    )
+              )
+            ORDER BY article.updatedAt ASC
+            """)
+    List<NewsArticle> findPeriodicRecoveryCandidates(
+            @Param("pendingStatus") AnalysisStatus pendingStatus,
+            @Param("failedStatus") AnalysisStatus failedStatus,
+            @Param("processingStatus") AnalysisStatus processingStatus,
+            @Param("pendingStaleBefore") LocalDateTime pendingStaleBefore,
+            @Param("processingStaleBefore") LocalDateTime processingStaleBefore,
+            @Param("excludedIds") List<Long> excludedIds,
             Pageable pageable);
 }

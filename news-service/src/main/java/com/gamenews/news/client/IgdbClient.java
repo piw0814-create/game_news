@@ -74,6 +74,16 @@ public class IgdbClient {
         return properties.isConfigured();
     }
 
+    public List<IgdbGame> findGamesByExactName(String name, int limit) {
+        ensureConfigured();
+        String safeName = escapeApicalypseString(name);
+        int safeLimit = Math.max(1, Math.min(limit, 20));
+        String body = "fields " + GAME_FIELDS + "; "
+                + "where name ~ \"" + safeName + "\"; "
+                + "limit " + safeLimit + ";";
+        return requestGames(body, "exact name=\"" + safeLogValue(name) + "\"");
+    }
+
     public List<IgdbGame> searchGames(String searchTerm, int limit) {
         ensureConfigured();
         String safeSearch = escapeApicalypseString(searchTerm);
@@ -111,16 +121,30 @@ public class IgdbClient {
         return List.copyOf(result);
     }
 
-    public List<IgdbFranchise> searchFranchises(String searchTerm, int limit) {
+    public List<IgdbFranchise> findFranchisesByExactName(String name, int limit) {
         ensureConfigured();
-        String safeSearch = escapeApicalypseString(searchTerm);
-        int safeLimit = Math.max(1, Math.min(limit, 10));
-        String body = "fields id,name,games; search \"" + safeSearch + "\"; limit " + safeLimit + ";";
+        String safeName = escapeApicalypseString(name);
+        int safeLimit = Math.max(1, Math.min(limit, 20));
+        String body = "fields id,name,games; where name ~ \"" + safeName + "\"; limit " + safeLimit + ";";
         return request(
                 "/franchises",
                 body,
                 new ParameterizedTypeReference<List<IgdbFranchise>>() {},
-                "franchise search query=\"" + safeLogValue(searchTerm) + "\"");
+                "franchise exact name=\"" + safeLogValue(name) + "\"");
+    }
+
+    public List<IgdbFranchise> searchFranchises(String searchTerm, int limit) {
+        ensureConfigured();
+        String safeSearch = escapeApicalypseString(searchTerm);
+        int safeLimit = Math.max(1, Math.min(limit, 10));
+        // Franchise is safer to discover through the documented case-insensitive name filter
+        // instead of relying on full-text search ordering.
+        String body = "fields id,name,games; where name ~ *\"" + safeSearch + "\"*; limit " + safeLimit + ";";
+        return request(
+                "/franchises",
+                body,
+                new ParameterizedTypeReference<List<IgdbFranchise>>() {},
+                "franchise fuzzy name=\"" + safeLogValue(searchTerm) + "\"");
     }
 
     public IgdbFranchise getFranchiseById(Long igdbId) {

@@ -31,17 +31,21 @@ class Settings(BaseSettings):
     # 재시작 시 미완료 기사 복구
     analysis_recovery_enabled: bool = True
     analysis_recovery_limit: int = 20
+    analysis_recovery_max_total: int = 200
     analysis_recovery_processing_stale_minutes: int = 15
     analysis_recovery_startup_retry_count: int = 10
     analysis_recovery_startup_retry_delay_seconds: float = 3.0
+    analysis_recovery_circuit_breaker_consecutive_failures: int = 3
+    analysis_recovery_periodic_enabled: bool = True
+    analysis_recovery_periodic_interval_seconds: int = 1800
+    analysis_recovery_periodic_max_total: int = 100
+    analysis_recovery_periodic_pending_stale_minutes: int = 15
 
     # OpenAI
     openai_api_key: str = ""
     openai_model: str = "gpt-5.6-luna"
     openai_max_content_chars: int = 12000
     openai_max_output_tokens: int = 3000
-    openai_known_games_limit: int = 200
-    openai_known_franchises_limit: int = 100
     openai_topic_match_max_output_tokens: int = 500
     openai_topic_analysis_max_output_tokens: int = 900
 

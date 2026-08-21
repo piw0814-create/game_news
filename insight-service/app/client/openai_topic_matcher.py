@@ -4,6 +4,7 @@ from typing import List
 from openai import OpenAI
 
 from app.config.settings import settings
+from app.client.openai_usage import log_openai_usage
 from app.model.schemas import (
     ArticleAnalysisResult,
     NewsArticleResponse,
@@ -55,7 +56,9 @@ class OpenAITopicMatcher:
             ],
             text_format=TopicMatchResult,
             max_output_tokens=settings.openai_topic_match_max_output_tokens,
+            prompt_cache_key="game-intelligence:topic-match:v1",
         )
+        log_openai_usage(response, "topic_match", article.id)
 
         result = response.output_parsed
         if result is None:

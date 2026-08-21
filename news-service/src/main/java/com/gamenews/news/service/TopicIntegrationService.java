@@ -97,7 +97,7 @@ public class TopicIntegrationService {
             }
         }
 
-        if (candidates.size() < request.getLimit()) {
+        if (request.isAllowRecentFallback() && candidates.size() < request.getLimit()) {
             List<Topic> recentCandidates = topicRepository
                     .findRecentCandidatesUpdatedAfter(
                             cutoff,
@@ -187,9 +187,9 @@ public class TopicIntegrationService {
         Topic topic = Topic.builder()
                 .title(title)
                 .summary(trimToNull(request.getSummary()))
-                .whyImportant(null)
+                .whyImportant(trimToNull(request.getInitialWhyImportant()))
                 .category(request.getCategory())
-                .importanceScore(null)
+                .importanceScore(request.getInitialImportanceScore())
                 .firstSeenAt(firstSeenAt)
                 .lastUpdatedAt(firstSeenAt)
                 .build();

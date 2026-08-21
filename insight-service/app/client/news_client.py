@@ -98,14 +98,21 @@ class NewsServiceClient:
         self,
         limit: int,
         processing_stale_minutes: int,
+        pending_stale_minutes: int = 0,
+        exclude_ids: List[int] | None = None,
     ) -> List[NewsArticleResponse]:
+        params = {
+            "limit": limit,
+            "processingStaleMinutes": processing_stale_minutes,
+            "pendingStaleMinutes": pending_stale_minutes,
+        }
+        if exclude_ids:
+            params["excludeIds"] = ",".join(str(article_id) for article_id in exclude_ids)
+
         data = self._request(
             "GET",
             "/api/internal/news/recovery-candidates",
-            params={
-                "limit": limit,
-                "processingStaleMinutes": processing_stale_minutes,
-            },
+            params=params,
         )
         return [NewsArticleResponse.model_validate(item) for item in data]
 
@@ -196,6 +203,7 @@ class NewsServiceClient:
         article_id: int,
         window_hours: int,
         limit: int,
+        allow_recent_fallback: bool = True,
     ) -> List[TopicCandidateResponse]:
         data = self._request(
             "POST",
@@ -204,6 +212,7 @@ class NewsServiceClient:
                 "articleId": article_id,
                 "windowHours": window_hours,
                 "limit": limit,
+                "allowRecentFallback": allow_recent_fallback,
             },
         )
         return [TopicCandidateResponse.model_validate(item) for item in data]
@@ -215,6 +224,8 @@ class NewsServiceClient:
         title: str,
         summary: str,
         category: NewsCategory,
+        importance_score: int | None = None,
+        why_important: str | None = None,
     ) -> TopicIntegrationResponse:
         data = self._request(
             "POST",
@@ -225,6 +236,8 @@ class NewsServiceClient:
                 "title": title,
                 "summary": summary,
                 "category": category.value,
+                "initialImportanceScore": importance_score,
+                "initialWhyImportant": why_important,
             },
         )
         return TopicIntegrationResponse.model_validate(data)

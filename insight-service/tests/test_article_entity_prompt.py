@@ -22,8 +22,9 @@ def test_unknown_article_entity_can_be_returned_for_backend_igdb_verification():
         analysisStatus=AnalysisStatus.PROCESSING,
     )
 
-    prompt = OpenAIArticleAnalyzer()._build_prompt(article, [], [])
+    prompt = OpenAIArticleAnalyzer()._build_prompt(article)
 
-    assert "Known franchises are identity hints, not a whitelist" in prompt
-    assert "backend will verify the returned name against IGDB" in prompt
+    assert "backend will verify the returned name against Local Catalog/IGDB" in prompt
     assert "route ambiguous matches to admin review" in prompt
+    assert "Known games:" not in prompt
+    assert "Known franchises:" not in prompt
