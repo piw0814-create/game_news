@@ -131,6 +131,13 @@ GET    /api/admin/entity-reviews/{id}
 POST   /api/admin/entity-reviews/{id}/resolve
 POST   /api/admin/entity-reviews/{id}/recheck
 POST   /api/admin/entity-reviews/{id}/reopen
+
+GET    /api/admin/operations/news
+GET    /api/admin/operations/collector
+GET    /api/admin/operations/insight
+
+POST   /api/admin/news/canonical-urls/backfill?dryRun=true
+POST   /api/admin/news/content/sanitize?dryRun=true
 ```
 
 `/api/news/**`, `/api/collector/**`, 사용자 단건 조회, 일반 Game/Topic 쓰기 API는 Gateway에 노출하지 않습니다. Topic 생성과 Article/Game/Franchise 관계 반영은 Insight의 내부 Topic 통합 API가 담당하며 수동 Topic 쓰기 API는 두지 않습니다. Collector와 Insight는 Docker 내부 네트워크에서 News Service를 직접 호출합니다. 개발 중 운영용 API를 확인해야 할 때는 로컬 호스트의 개별 서비스 포트를 사용합니다. `/api/admin/**`는 `ADMIN` 역할만 접근할 수 있으며 Gateway와 News Service 양쪽에서 권한을 검사합니다.
@@ -188,7 +195,19 @@ Xbox Wire / PlayStation Blog
 
 기본 자동 수집은 출처별 최대 10건씩 10분 간격으로 실행합니다. Collector 재기동 시에는 출처별 DB 최신 `publishedAt`을 기준선으로 삼아 RSS에서 최대 50건까지 확인하고, 기준선 이후 후보만 URL 중복 검사를 거쳐 저장합니다. 기준선이 없는 초기 수집은 과거 전체를 채우지 않고 일반 수집과 동일하게 최신 10건만 저장합니다.
 
+Collector 외부 통신은 기본적으로 connect 3초, RSS 응답 15초, News Service 응답 5초 timeout을 사용합니다. 기사 자체의 검증 실패는 해당 기사만 `failed`로 집계하고 다음 기사를 계속 처리하지만, News Service 연결/응답 timeout이나 5xx 같은 인프라 오류는 현재 출처의 남은 기사 처리를 빠르게 중단하고 다음 RSS 출처로 넘어갑니다. 출처별 최근 시도/성공 시각과 fetched/saved/skipped/failed, 마지막 오류는 관리자 Operations API에서 확인할 수 있습니다.
+
 Insight Service는 `news.created`를 기사 1건씩 처리합니다. 시작 시 `PENDING`, `FAILED`, `ANALYZED`, `TOPIC_PENDING`과 오래된 `PROCESSING` 기사를 복구하고, 주기 복구에서는 오래된 `PENDING`/`PROCESSING`/`ANALYZED`/`TOPIC_PENDING` 및 `FAILED`를 다시 확인합니다. `ANALYZED`와 `TOPIC_PENDING`은 저장된 Article Analyzer 체크포인트를 재사용하므로 Article AI를 다시 호출하지 않습니다. Topic Matcher가 기술적으로 실패하거나 Structured Output을 파싱하지 못하면 새 Topic을 생성하지 않고 `TOPIC_PENDING` 상태를 유지해 다음 Recovery에서 동일 단계부터 재개합니다.
+
+Kafka Consumer 연결이 끊기거나 예외로 종료되면 1초부터 시작해 최대 30초까지 증가하는 backoff로 재연결합니다. malformed JSON이나 `articleId`가 없는 구조적 poison message는 `news.created.dlq`로 보내고, News Service의 일시 장애나 DB에 복구 상태가 남는 처리 실패는 DLQ로 보내지 않고 기존 retry/Recovery 경로를 사용합니다. Insight Operations API에서는 Consumer 연결/생존 상태, 마지막 consume/commit/error와 Recovery 상태를 확인할 수 있습니다.
+
+### 데이터 품질 / 입력 방어
+
+News Service는 수집 경로와 관계없이 저장 직전에 기사 URL과 본문을 공통 정책으로 정규화합니다. 원본 `url`은 보존하고 `canonical_url`을 별도로 계산해 중복 판정에 사용하며, fragment와 `utm_*`, `fbclid`, `gclid`, `ref`, `ref_src` 같은 추적 파라미터는 제거하되 실제 의미가 있는 query parameter는 유지합니다.
+
+기사 본문은 HTML parser를 사용해 `script`, `style`, `noscript`, `iframe`, `svg`, `form` 등 비본문 요소와 태그를 제거하고 HTML entity/공백을 정규화한 뒤 저장합니다. 기존 데이터는 관리자 maintenance API의 `dryRun`으로 영향 범위를 먼저 확인한 뒤 canonical URL backfill 또는 content sanitization을 실행할 수 있습니다. 이 maintenance 작업은 Kafka 재발행이나 AI 재분석을 자동으로 발생시키지 않습니다.
+
+Article Analyzer, Topic Matcher, Topic Analyzer는 기사와 Topic의 제목·본문·요약·메타데이터를 모두 비신뢰 데이터로 명시해 전달합니다. 데이터 내부의 프롬프트 명령, 역할 변경 요청, 시스템 지시 무시 요청, 출력 형식 변경 요청은 실행하지 않고 분석 대상 텍스트로만 취급합니다.
 
 ## IGDB-first 엔티티 자동확정 / 관리자 검토
 
@@ -356,7 +375,7 @@ API Gateway → X-User-Id / X-User-Email → 내부 서비스
 
 API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `insight-service`까지의 개발용 포트 `8081~8085`는 Docker Compose에서 `127.0.0.1`에만 바인딩하여 같은 PC에서는 테스트할 수 있지만 외부 네트워크에서 직접 접근하지 못하도록 제한합니다. 운영 배포에서는 개별 서비스의 host port publish 자체를 제거하고 내부 네트워크에서만 접근하도록 구성하는 것이 권장됩니다.
 
-비동기 파이프라인에서 Kafka Consumer 처리 실패는 재시도할 수 있도록 offset을 커밋하지 않지만, NewsArticle 저장 후 `news.created` Producer 발행이 최종 실패하면 해당 기사가 `PENDING`으로 남을 수 있습니다. MVP에서는 이 한계를 문서화하며 운영 수준에서는 Outbox Pattern 또는 별도 재발행 복구 작업을 추가하는 것을 권장합니다.
+비동기 파이프라인에서 Kafka Consumer의 일시적 처리 실패는 기존 retry/Recovery 경로를 사용하고, 구조적으로 처리할 수 없는 poison message만 DLQ로 격리합니다. NewsArticle 저장 후 `news.created` Producer 발행이 실패해 기사가 `PENDING`으로 남더라도 Periodic Recovery가 해당 기사를 다시 찾아 분석 파이프라인을 재개하므로 비즈니스 처리는 복구할 수 있습니다. 다만 DB 저장과 Kafka 이벤트 전달 자체를 하나의 원자적 보장으로 묶지는 않으므로, 실제 운영에서 더 엄격한 전달 보장이 필요해질 경우 Outbox Pattern을 검토합니다.
 
 ## 시간 정책
 
@@ -367,14 +386,14 @@ API Gateway를 외부 신뢰 경계로 사용합니다. `user-service`부터 `in
 - Vue는 `new Date(...)`로 offset이 포함된 ISO-8601 값을 브라우저 로컬 시간(KST 등)으로 표시한다.
 - `recencyBonus`와 Topic 후보 시간 비교는 모두 동일한 UTC 기준으로 계산한다.
 
-## 후속 개선 항목
+## 향후 확장 검토 항목
 
-현재 MVP 이후에는 운영 수준의 안정성과 데이터 품질 개선을 우선합니다.
+현재 MVP의 핵심 안정화와 데이터 품질 개선은 완료했습니다. 아래 항목은 실제 배포, 트래픽 증가 또는 기능 확장 시 필요에 따라 검토합니다.
 
-- Kafka 저장/발행 원자성 보강: Outbox Pattern 또는 별도 재발행 복구 작업
-- 관측/운영: 메트릭, 중앙 로그, 알림, 백업·복구 정책
-- Topic AI 재분석 실패에 대한 자동 retry/status 관리
-- IGDB 대규모 카탈로그 동기화 시 작업 큐/진행률 표시
+- 현재 `PENDING`/checkpoint Recovery로 비즈니스 처리를 복구하며, DB 저장과 Kafka 전달에 더 엄격한 원자성이 필요해질 경우 Outbox Pattern을 검토합니다.
+- 관리자 Operations API는 구현되어 있으며, 실제 운영 배포 시 메트릭 수집, 중앙 로그, 알림, DB 백업·복구 정책을 추가합니다.
+- Topic 수동/관리자 재분석 작업이 확대될 경우 별도 retry/status 관리와 작업 이력 추적을 검토합니다.
+- IGDB 대규모 카탈로그 동기화를 도입할 경우 작업 큐와 진행률 표시를 검토합니다.
 
 ## Development Notes
 
