@@ -77,6 +77,28 @@ class EntityCandidateRankingServiceTest {
     }
 
     @Test
+    void yearQualifiedTitleUsesYearAsDisambiguationAndPrefersMatchingRelease() {
+        assertThat(service.yearQualifiedBaseName("God of War (2018)")).isEqualTo("God of War");
+        assertThat(service.yearQualifier("God of War (2018)")).isEqualTo(2018);
+        assertThat(service.yearQualifiedBaseName("F1 24")).isNull();
+
+        EntityReviewDto.Candidate oldGame = game(100L, "God of War", "Main Game");
+        EntityReviewDto.Candidate targetGame = game(200L, "God of War", "Main Game");
+        oldGame = EntityReviewDto.Candidate.builder()
+                .source(oldGame.getSource()).entityKind(oldGame.getEntityKind()).igdbId(oldGame.getIgdbId())
+                .name(oldGame.getName()).gameType(oldGame.getGameType()).releaseYear(2005).build();
+        targetGame = EntityReviewDto.Candidate.builder()
+                .source(targetGame.getSource()).entityKind(targetGame.getEntityKind()).igdbId(targetGame.getIgdbId())
+                .name(targetGame.getName()).gameType(targetGame.getGameType()).releaseYear(2018).build();
+
+        List<EntityReviewDto.Candidate> ranked = service.rank(
+                "God of War (2018)", EntityReviewKind.GAME, List.of(oldGame, targetGame));
+
+        assertThat(ranked.get(0).getIgdbId()).isEqualTo(200L);
+        assertThat(ranked.get(0).getReleaseYear()).isEqualTo(2018);
+    }
+
+    @Test
     void compositeExpansionNameCanCollapseToReviewOnlyLookupKey() {
         assertThat(service.collapsedQualifiedTailName(
                 "S.T.A.L.K.E.R. 2: Heart of Chornobyl – Cost of Hope"))

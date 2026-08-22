@@ -34,6 +34,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -150,11 +152,26 @@ public class EntityReviewService {
             }
         }
 
+        // AI may append a release year only to disambiguate same-name games, while IGDB keeps
+        // the canonical title without the year (e.g. "God of War (2018)" -> "God of War").
+        // Treat the year as review-only disambiguation metadata: retry the base title, but never
+        // AUTO_LINK from this fallback. Candidate ranking will prefer the matching release year.
+        List<Game> reviewLocalCandidates = localCandidates;
+        String yearQualifiedBaseName = candidateRankingService.yearQualifiedBaseName(request.getDetectedName());
+        if (gameCandidates.isEmpty() && yearQualifiedBaseName != null) {
+            reviewLocalCandidates = mergeLocalGameCandidates(
+                    reviewLocalCandidates,
+                    gameIdentityService.findExactCandidates(yearQualifiedBaseName));
+            List<IgdbClient.IgdbGame> yearBaseExact = findExactGames(yearQualifiedBaseName);
+            gameCandidates = yearBaseExact.isEmpty()
+                    ? searchGames(yearQualifiedBaseName)
+                    : yearBaseExact;
+        }
+
         // Some AI names concatenate the parent game's full subtitle with an expansion/DLC
         // title (e.g. "S.T.A.L.K.E.R. 2: Heart of Chornobyl – Cost of Hope"). Only after the
-        // normal and Standard Edition lookups return nothing, try a collapsed review-only key.
-        // Never AUTO_LINK from this fallback: surface the result to the admin instead.
-        List<Game> reviewLocalCandidates = localCandidates;
+        // normal, Standard Edition, and year-qualified lookups return nothing, try a collapsed
+        // review-only key. Never AUTO_LINK from this fallback: surface the result to the admin.
         String collapsedTailName = candidateRankingService.collapsedQualifiedTailName(request.getDetectedName());
         if (gameCandidates.isEmpty() && collapsedTailName != null) {
             reviewLocalCandidates = mergeLocalGameCandidates(
@@ -703,6 +720,17 @@ public class EntityReviewService {
         }
 
         if (review.getEntityKind() == EntityReviewKind.GAME && igdbGames.isEmpty()) {
+            String yearQualifiedBaseName = candidateRankingService.yearQualifiedBaseName(name);
+            if (yearQualifiedBaseName != null) {
+                localGames = mergeLocalGameCandidates(
+                        localGames,
+                        gameIdentityService.findExactCandidates(yearQualifiedBaseName));
+                List<IgdbClient.IgdbGame> yearBaseExact = findExactGames(yearQualifiedBaseName);
+                igdbGames = yearBaseExact.isEmpty() ? searchGames(yearQualifiedBaseName) : yearBaseExact;
+            }
+        }
+
+        if (review.getEntityKind() == EntityReviewKind.GAME && igdbGames.isEmpty()) {
             String collapsedTailName = candidateRankingService.collapsedQualifiedTailName(name);
             if (collapsedTailName != null) {
                 localGames = mergeLocalGameCandidates(
@@ -1054,6 +1082,7 @@ public class EntityReviewService {
                 .igdbId(game.getId())
                 .name(game.getName())
                 .gameType(game.getGameType() == null ? null : game.getGameType().getType())
+                .releaseYear(releaseYear(game))
                 .versionParentIgdbId(game.getVersionParent())
                 .build()));
         return new ArrayList<>(unique.values());
@@ -1116,6 +1145,7 @@ public class EntityReviewService {
                 .publisher(firstNonBlank(local.getPublisher(), other.getPublisher()))
                 .developer(firstNonBlank(local.getDeveloper(), other.getDeveloper()))
                 .gameType(firstNonBlank(local.getGameType(), other.getGameType()))
+                .releaseYear(firstNonNull(local.getReleaseYear(), other.getReleaseYear()))
                 .versionParentIgdbId(firstNonNull(local.getVersionParentIgdbId(), other.getVersionParentIgdbId()))
                 .build());
     }
@@ -1132,6 +1162,11 @@ public class EntityReviewService {
         }
         return candidate.getEntityKind() + ":NAME:"
                 + String.valueOf(candidate.getName()).trim().toLowerCase(Locale.ROOT);
+    }
+
+    private Integer releaseYear(IgdbClient.IgdbGame game) {
+        if (game == null || game.getFirstReleaseDate() == null || game.getFirstReleaseDate() <= 0) return null;
+        return Instant.ofEpochSecond(game.getFirstReleaseDate()).atZone(ZoneOffset.UTC).getYear();
     }
 
     private <T> T firstNonNull(T first, T second) {

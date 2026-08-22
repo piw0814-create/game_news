@@ -24,6 +24,9 @@ public class EntityCandidateRankingService {
     private static final Pattern QUALIFIED_TAIL_PATTERN = Pattern.compile(
             "^(.+?:)\\s*(.+?)\\s+[-–—]\\s+(.+)$",
             Pattern.UNICODE_CASE);
+    private static final Pattern YEAR_QUALIFIER_PATTERN = Pattern.compile(
+            "^(.+?)\\s*\\(((?:19|20)\\d{2})\\)\\s*$",
+            Pattern.UNICODE_CASE);
 
     public List<EntityReviewDto.Candidate> rank(
             String detectedName,
@@ -45,6 +48,10 @@ public class EntityCandidateRankingService {
                     && candidate.getGameType() != null
                     && candidate.getGameType().equalsIgnoreCase("Main Game")
                     && candidate.getVersionParentIgdbId() == null;
+            Integer detectedYear = yearQualifier(detectedName);
+            boolean releaseYearMatch = detectedYear != null
+                    && candidate.getReleaseYear() != null
+                    && detectedYear.equals(candidate.getReleaseYear());
 
             // Exact local identities must never disappear. Weak fuzzy IGDB suggestions are noise
             // (e.g. "The Finals" -> "Final Fantasy") and are omitted from admin review.
@@ -53,6 +60,7 @@ public class EntityCandidateRankingService {
             }
 
             double sortScore = identityScore
+                    + (releaseYearMatch ? 0.08 : 0.0)
                     + (preferred ? 0.02 : 0.0)
                     + (localVerified ? 0.01 : local ? 0.005 : 0.0)
                     + (mainGame ? 0.005 : 0.0);
@@ -91,6 +99,22 @@ public class EntityCandidateRankingService {
         String stripped = normalized.replaceFirst(
                 "(?iu)\\s*[:\\-–—]?\\s*standard\\s+edition\\s*$", "").trim();
         return stripped.equals(normalized) || stripped.isBlank() ? null : stripped;
+    }
+
+    String yearQualifiedBaseName(String value) {
+        if (value == null || value.isBlank()) return null;
+        String normalized = normalizeUnicode(value).trim();
+        Matcher matcher = YEAR_QUALIFIER_PATTERN.matcher(normalized);
+        if (!matcher.matches()) return null;
+        String baseName = matcher.group(1).trim();
+        return baseName.isBlank() ? null : baseName;
+    }
+
+    Integer yearQualifier(String value) {
+        if (value == null || value.isBlank()) return null;
+        Matcher matcher = YEAR_QUALIFIER_PATTERN.matcher(normalizeUnicode(value).trim());
+        if (!matcher.matches()) return null;
+        return Integer.valueOf(matcher.group(2));
     }
 
     /**

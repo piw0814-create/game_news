@@ -430,6 +430,42 @@ class EntityReviewServiceApiOptimizationTest {
     }
 
     @Test
+    void yearQualifiedGameFallsBackToCanonicalTitleForReviewAndKeepsReleaseYear() throws Exception {
+        NewsArticle article = org.mockito.Mockito.mock(NewsArticle.class);
+        when(article.getId()).thenReturn(174L);
+        when(newsArticleRepository.findById(174L)).thenReturn(Optional.of(article));
+        when(gameIdentityService.findExactCandidates("God of War (2018)")).thenReturn(List.of());
+        when(gameIdentityService.findExactCandidates("God of War")).thenReturn(List.of());
+        when(igdbClient.isConfigured()).thenReturn(true);
+        when(igdbClient.findGamesByExactName("God of War (2018)", 20)).thenReturn(List.of());
+        when(igdbClient.searchGames("God of War (2018)", 5)).thenReturn(List.of());
+
+        IgdbClient.IgdbGame oldGame = game(100L, "God of War", "Main Game");
+        oldGame.setFirstReleaseDate(1115856000L); // 2005-05-12 UTC
+        IgdbClient.IgdbGame targetGame = game(19560L, "God of War", "Main Game");
+        targetGame.setFirstReleaseDate(1524182400L); // 2018-04-20 UTC
+        when(igdbClient.findGamesByExactName("God of War", 20)).thenReturn(List.of(oldGame, targetGame));
+        when(objectMapper.writeValueAsString(any())).thenReturn("[]");
+        when(entityReviewRepository.findFirstByArticle_IdAndEntityKindAndDetectedNameIgnoreCaseAndStatusOrderByIdDesc(
+                any(), any(), any(), any())).thenReturn(Optional.empty());
+        when(entityReviewRepository.save(any(EntityReview.class))).then(returnsFirstArg());
+
+        EntityReviewDto.InternalResolveResponse response = service.resolveGame(
+                request(174L, "God of War (2018)", "Amazon live-action series article"));
+
+        assertThat(response.getOutcome()).isEqualTo(EntityReviewDto.ResolutionOutcome.REVIEW_REQUIRED);
+        verify(igdbClient).findGamesByExactName("God of War", 20);
+        verify(gameRepository, never()).findByIgdbId(19560L);
+        verify(objectMapper).writeValueAsString(argThat(value -> {
+            if (!(value instanceof List<?> list) || list.isEmpty()) return false;
+            Object first = list.get(0);
+            return first instanceof EntityReviewDto.Candidate candidate
+                    && Long.valueOf(19560L).equals(candidate.getIgdbId())
+                    && Integer.valueOf(2018).equals(candidate.getReleaseYear());
+        }));
+    }
+
+    @Test
     void standardEditionFallsBackToBaseLookup() {
         NewsArticle article = org.mockito.Mockito.mock(NewsArticle.class);
         Game mapped = org.mockito.Mockito.mock(Game.class);

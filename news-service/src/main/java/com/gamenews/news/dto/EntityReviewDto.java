@@ -79,6 +79,7 @@ public class EntityReviewDto {
         private String publisher;
         private String developer;
         private String gameType;
+        private Integer releaseYear;
         private Long versionParentIgdbId;
     }
 

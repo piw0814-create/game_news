@@ -30,6 +30,7 @@ public class IgdbClient {
     private static final String GAME_FIELDS = String.join(",",
             "id",
             "name",
+            "first_release_date",
             "alternative_names.name",
             "alternative_names.comment",
             "game_localizations.name",
@@ -424,6 +425,8 @@ public class IgdbClient {
     public static class IgdbGame {
         private Long id;
         private String name;
+        @JsonProperty("first_release_date")
+        private Long firstReleaseDate;
         @JsonProperty("alternative_names")
         private List<IgdbAlternativeName> alternativeNames;
         @JsonProperty("game_localizations")

@@ -139,6 +139,7 @@
                       {{ candidateSourceLabel(candidate.source) }}
                       <template v-if="candidate.localId"> · Local #{{ candidate.localId }}</template>
                       <template v-if="candidate.igdbId"> · #{{ candidate.igdbId }}</template>
+                      <template v-if="candidate.releaseYear"> · {{ candidate.releaseYear }}</template>
                       <template v-if="candidate.igdbCollectionId"> · #{{ candidate.igdbCollectionId }}</template>
                     </p>
                     <p v-if="candidate.publisher || candidate.developer" class="candidate-meta">
@@ -265,6 +266,10 @@ function candidateRank(review, candidate) {
   let score = 100
 
   if (name && name === detected) score -= 40
+
+  const yearMatch = String(review.detectedName || '').trim().match(/\(((?:19|20)\d{2})\)\s*$/)
+  if (yearMatch && Number(candidate.releaseYear) === Number(yearMatch[1])) score -= 25
+
   if (candidate.source === 'LOCAL_IGDB') score -= 20
   else if (candidate.source === 'LOCAL') score -= 8
 
